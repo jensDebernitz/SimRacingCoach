@@ -71,6 +71,24 @@ public partial class LineOverlayWindow : Window
         Hide();
     }
 
+    /// <summary>
+    /// Beansprucht den Platz ganz oben neu, falls das Spiel ihn übernommen hat.
+    /// </summary>
+    /// <remarks>
+    /// Wird von der Anzeige getaktet und nicht von hier aus: Beide Fenster
+    /// müssen in einer festen Reihenfolge nach oben, sonst legt sich dieses
+    /// bildschirmfüllende Fenster über die Anzeige.
+    /// </remarks>
+    public void KeepOnTop()
+    {
+        if (!IsVisible)
+        {
+            return;
+        }
+
+        NativeMethods.BringToTop(new WindowInteropHelper(this).Handle);
+    }
+
     /// <summary>Beendet das Fenster endgültig, beim Schließen der Anwendung.</summary>
     public void Shutdown()
     {

@@ -26,6 +26,18 @@ internal static partial class NativeMethods
 
     internal const int WmHotkey = 0x0312;
 
+    /// <summary>Pseudo-Fenster für "ganz nach oben" in <see cref="SetWindowPos"/>.</summary>
+    private static readonly nint HwndTopmost = -1;
+
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+
+    /// <summary>Der Fokus bleibt, wo er ist – also beim Spiel.</summary>
+    private const uint SwpNoActivate = 0x0010;
+
+    /// <summary>Kein Neuzeichnen anstoßen; es ändert sich nur die Reihenfolge.</summary>
+    private const uint SwpNoSendChanging = 0x0400;
+
     internal const uint ModAlt = 0x0001;
     internal const uint ModControl = 0x0002;
     internal const uint ModShift = 0x0004;
@@ -49,6 +61,32 @@ internal static partial class NativeMethods
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool UnregisterHotKey(nint hWnd, int id);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetWindowPos(
+        nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    /// <summary>
+    /// Schiebt das Fenster wieder ganz nach oben, ohne es zu aktivieren.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Immer oben" ist keine Rangliste, sondern eine Gruppe: Unter allen
+    /// Fenstern mit diesem Merkmal liegt das zuletzt eingeordnete vorn. Startet
+    /// AMS2 und meldet sich selbst als immer oben an, rutscht das Overlay
+    /// darunter – es verschwindet nicht, es ist nur verdeckt. WPF merkt davon
+    /// nichts, <c>Topmost</c> steht weiterhin auf true.
+    /// </para>
+    /// <para>
+    /// Deshalb wird der Platz regelmäßig neu beansprucht. Ohne
+    /// <see cref="SwpNoActivate"/> würde dabei der Fokus vom Spiel wegwandern,
+    /// und AMS2 würde bei jedem Mal in den Hintergrund gehen.
+    /// </para>
+    /// </remarks>
+    internal static void BringToTop(nint handle) =>
+        SetWindowPos(handle, HwndTopmost, 0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoSendChanging);
 
     /// <summary>Schaltet um, ob Mausklicks durch das Fenster fallen.</summary>
     internal static void SetClickThrough(nint handle, bool enabled)

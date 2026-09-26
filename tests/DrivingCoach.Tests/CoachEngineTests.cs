@@ -1,4 +1,5 @@
 using DrivingCoach.Coaching;
+using DrivingCoach.Coaching.Model;
 using DrivingCoach.Telemetry;
 
 namespace DrivingCoach.Tests;
@@ -166,10 +167,65 @@ public sealed class CoachEngineTests : IDisposable
         return styles;
     }
 
+    /// <summary>
+    /// Eine gespeicherte Streckenkarte, die nicht mehr zur gefahrenen Runde
+    /// passt, darf das Lernen nicht dauerhaft blockieren.
+    /// </summary>
+    /// <remarks>
+    /// AMS2 meldet dieselbe Strecke gelegentlich in anderer Länge – andere
+    /// Variante unter gleichem Namen, andere Boxengasse. Früher lehnte die alte
+    /// Karte dann jede Runde ab, wortlos und für immer: Die Ideallinie
+    /// erschien auf dieser Strecke nie wieder, und die Anzeige zählte
+    /// unterdessen munter gefahrene Runden hoch.
+    /// </remarks>
+    [Fact]
+    public void Eine_unpassende_Streckenkarte_wird_neu_begonnen()
+    {
+        var maps = new TrackMapStore(_directory);
+        RecordedLap sample = VirtualDriver.DriveLaps(1)[0];
+
+        TrackMap mismatched = TrackMap.Empty(
+            VirtualDriver.Session.TrackKey,
+            VirtualDriver.Session.TrackDisplayName,
+            sample.TrackLength,
+            sample.BinSize,
+            sample.Channels.Count + 50);
+
+        // Ohne Runden hielte der Speicher die Karte für unbrauchbar und gäbe
+        // sie gar nicht erst heraus.
+        mismatched.LapCount = TrackMap.MinimumLaps;
+        maps.Save(mismatched);
+
+        var source = new ScriptedTelemetrySource(
+            VirtualDriver.Session,
+            VirtualDriver.Frames(VirtualDriver.NeutralStyles(), laps: 5));
+
+        var coach = new CoachEngine(
+            source, new LapStore(_directory), new CoachOptions(), maps: maps);
+
+        coach.MessageRaised += _messages.Add;
+        coach.Start();
+
+        TrackMap? after = maps.Load(VirtualDriver.Session.TrackKey);
+
+        Assert.NotNull(after);
+        Assert.Equal(sample.Channels.Count, after.Count);
+        Assert.True(
+            after.LapCount >= TrackMap.MinimumLaps,
+            $"Nach fünf Runden stehen erst {after.LapCount} in der Karte – sie lernt weiterhin nichts.");
+
+        Assert.Contains(_messages, m => m.Text.Contains("neu gelernt"));
+    }
+
     private CoachEngine Run(params CornerStyle[][] laps)
     {
         var source = new ScriptedTelemetrySource(VirtualDriver.Session, Stitch(laps));
-        var coach = new CoachEngine(source, new LapStore(_directory), new CoachOptions());
+
+        // Auch der Kartenspeicher zeigt ins Testverzeichnis. Ohne das schriebe
+        // jeder Testlauf Streckenkarten in die echten Daten des angemeldeten
+        // Benutzers.
+        var coach = new CoachEngine(
+            source, new LapStore(_directory), new CoachOptions(), maps: new TrackMapStore(_directory));
 
         coach.MessageRaised += _messages.Add;
         coach.SpeechRequested += _speech.Add;

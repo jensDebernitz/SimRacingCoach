@@ -87,12 +87,7 @@ public sealed class IdealLinePresenter
 
         if (line is null)
         {
-            Status = state.ValidLapCount switch
-            {
-                0 => "Ideallinie: noch keine gültige Runde gefahren",
-                var laps => $"Ideallinie: wird gelernt ({laps} Runden)",
-            };
-
+            Status = Explain(state);
             return [];
         }
 
@@ -122,6 +117,49 @@ public sealed class IdealLinePresenter
 
         Status = string.Empty;
         return LineRibbon.Build(line, camera, frame.LapDistance);
+    }
+
+    /// <summary>
+    /// Sagt, woran es gerade hängt, solange keine Linie da ist.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Die Zahl, auf die es ankommt, ist die der <em>gelernten</em> Runden, nicht
+    /// die der gefahrenen. Beide können auseinanderlaufen: Eine Runde zählt als
+    /// gültig, sobald sie sauber zu Ende gefahren wurde – in die Streckenkarte
+    /// kommt sie aber nur mit Weltkoordinaten. Fehlen die, fährt man beliebig
+    /// viele Runden, ohne dass die Karte wächst.
+    /// </para>
+    /// <para>
+    /// Genau dieser Fall sah früher aus wie geduldiges Lernen: Die Anzeige
+    /// zählte die gefahrenen Runden hoch, während sich in der Karte nichts tat.
+    /// </para>
+    /// </remarks>
+    private static string Explain(CoachState state)
+    {
+        if (state.ValidLapCount == 0)
+        {
+            return "Ideallinie: noch keine gültige Runde gefahren";
+        }
+
+        TrackMap? map = state.TrackMap;
+
+        if (map is null || map.LapCount == 0)
+        {
+            return $"Ideallinie: {state.ValidLapCount} Runden gefahren, aber keine Streckendaten – AMS2 meldet keine Position";
+        }
+
+        if (!map.IsUsable)
+        {
+            return $"Ideallinie: wird gelernt ({map.LapCount} von {TrackMap.MinimumLaps} Runden)";
+        }
+
+        if (state.Reference is null)
+        {
+            return "Ideallinie: wartet auf eine Referenzrunde";
+        }
+
+        return "Ideallinie: wird berechnet …";
     }
 
     private void UseCar(string carName)

@@ -270,9 +270,22 @@ Stelle führt in die Wand. Der Grund steht jeweils im Overlay:
 | Text | Bedeutung |
 |---|---|
 | "noch keine gültige Runde gefahren" | Fahr eine saubere Runde. |
-| "wird gelernt (n Runden)" | Ab drei gültigen Runden ist die Linie da. |
+| "wird gelernt (n von 3 Runden)" | Ab drei gelernten Runden ist die Linie da. Gezählt wird, was in der Streckenkarte steht – nicht, was du gefahren bist. |
+| "n Runden gefahren, aber keine Streckendaten" | AMS2 liefert keine Fahrzeugposition. Ohne sie kann keine Karte entstehen. Prüf in AMS2, ob die Shared Memory auf *Project CARS 2* steht. |
+| "wartet auf eine Referenzrunde" | Die Strecke ist gelernt, aber es gibt keine Bestzeit, an der sich das Auto messen lässt. Eine saubere Runde genügt. |
+| "wird berechnet …" | Steht nur ein paar Sekunden nach der dritten Runde. |
 | "Blickrichtung noch nicht eingeordnet" | Wie AMS2 den Gierwinkel zählt, leitet der Coach aus einer Runde mit einem längeren geraden Stück ab. Kommt meist mit der ersten Runde von selbst. |
 | "Kalibrierung unplausibel" | Ein Wert steht im Unsinn. `Strg+Alt+E` und geradeziehen. |
+
+Die beiden Zahlen – gefahrene und gelernte Runden – laufen absichtlich getrennt.
+Eine Runde zählt als gefahren, sobald sie sauber zu Ende ist; in die Karte kommt
+sie nur mit Weltkoordinaten. Stehen da fünf gefahrene und null gelernte, liegt es
+nicht an der Geduld, sondern an den Daten.
+
+Meldet AMS2 dieselbe Strecke einmal in anderer Länge – andere Variante unter
+gleichem Namen –, passt die gespeicherte Karte nicht mehr. Der Coach sagt dann
+"Die gespeicherte Streckenkarte passt nicht mehr zu dieser Strecke" und fängt von
+vorn an; nach drei Runden ist die Linie wieder da.
 
 **In VR geht das nicht.** Das Band liegt auf dem Desktop-Bild, nicht im Headset.
 Und Vollbild-Exclusive schließt es genauso aus wie das übrige Overlay.
@@ -345,21 +358,30 @@ Name, kein Konto, keine Datei.
 
 Sie gelten systemweit, also auch während AMS2 den Fokus hat.
 
-| Kürzel | Wirkung |
-|---|---|
-| `Strg+Alt+O` | Overlay ein-/ausblenden |
-| `Strg+Alt+M` | Verschiebemodus – Rahmen wird gelb, Overlay mit der Maus ziehen, nochmal drücken zum Festsetzen |
-| `Strg+Alt+S` | Sprachausgabe ein/aus |
-| `Strg+Alt+L` | Ideallinie auf der Strecke ein/aus |
-| `Strg+Alt+E` | Linie einmessen – dann `Strg+Alt+←` `→` Wert wählen, `↑` `↓` verstellen |
-| `Strg+Alt+R` | Referenzrunde verwerfen und neu aufbauen |
-| `Strg+Alt+K` | Frage-Fenster öffnen (Eingabe braucht einen Gemini-Schlüssel) |
-| `Strg+Alt+F` | Fazit der Session holen |
-| `Strg+Alt+Q` | Coach beenden |
+| Kürzel | Ausweichtasten | Wirkung |
+|---|---|---|
+| `Strg+Alt+O` | `H`, `Y` | Overlay ein-/ausblenden |
+| `Strg+Alt+M` | `V`, `W`, `J` | Verschiebemodus – Rahmen wird gelb, Overlay mit der Maus ziehen, nochmal drücken zum Festsetzen |
+| `Strg+Alt+S` | `P`, `U` | Sprachausgabe ein/aus |
+| `Strg+Alt+L` | `I`, `G` | Ideallinie auf der Strecke ein/aus |
+| `Strg+Alt+E` | `N`, `B` | Linie einmessen – dann `Strg+Alt+←` `→` Wert wählen, `↑` `↓` verstellen |
+| `Strg+Alt+R` | `Z`, `X` | Referenzrunde verwerfen und neu aufbauen |
+| `Strg+Alt+K` | `A`, `D` | Frage-Fenster öffnen (Eingabe braucht einen Gemini-Schlüssel) |
+| `Strg+Alt+F` | `C`, `T` | Fazit der Session holen |
+| `Strg+Alt+Q` | `Ende`, `Entf` | Coach beenden |
+
+**Wenn ein Kürzel schon vergeben ist.** Tastenkürzel gelten systemweit, und wer
+zuerst kommt, mahlt zuerst: Lenkrad-Software, Aufnahmeprogramme und
+Herstellerwerkzeuge bedienen sich gern in derselben Ecke – `Strg+Alt+M` und
+`Strg+Alt+R` trifft es besonders oft. Der Coach probiert deshalb die
+Ausweichtasten der Reihe nach durch und schreibt unten ins Overlay, was daraus
+geworden ist ("Belegt von einem anderen Programm, deshalb verlegt: …"). Die
+Zeile mit der Belegung zeigt immer die Tasten, die wirklich gelten.
 
 Auch die Pfeiltasten liegen auf `Strg+Alt`, obwohl sie nur beim Einmessen etwas
 tun: Blanke Pfeiltasten systemweit zu belegen, würde jedes andere Programm
-lahmlegen, solange der Coach läuft.
+lahmlegen, solange der Coach läuft. Sind auch sie vergeben, rückt das Einmessen
+auf den Ziffernblock (`4` `6` `8` `2`).
 
 Das Frage-Fenster ist das einzige, das den Fokus von AMS2 wegzieht – anders
 ließe sich nichts tippen. `Esc` schließt es wieder, der Gesprächsverlauf bleibt
@@ -507,11 +529,14 @@ Aufzählung geratener Satz darf nicht mitten in der Kurve vorgelesen werden.
 | Statuszeile bleibt rot, "AMS2 nicht gefunden" | Shared Memory steht nicht auf "Project CARS 2", oder AMS2 lief schon vor dem Umstellen. AMS2 neu starten. |
 | "Verbunden (Versionswarnung)" | AMS2 hat das Speicherlayout geändert. Der Coach liest weiter, einzelne Werte können falsch sein. |
 | Overlay ist unsichtbar über dem Spiel | AMS2 läuft im Fullscreen-Exclusive-Modus. Auf Borderless umstellen. |
+| Overlay liegt hinter AMS2 | Sollte sich binnen einer Sekunde von selbst erledigen: Der Coach holt sich seinen Platz zurück, wenn ein anderes Fenster ihn beansprucht. Bleibt es dahinter, läuft AMS2 im Fullscreen-Exclusive-Modus (siehe Zeile darüber). |
 | Overlay ist ganz weg | Vermutlich mit `Strg+Alt+O` ausgeblendet. Nochmal drücken. |
-| Tastenkürzel tun nichts | Ein anderes Programm hält die Kombination. Der Coach schreibt unten ins Overlay, welche das betrifft. |
+| Ein Tastenkürzel tut nichts | Ein anderes Programm hält die Kombination. Der Coach weicht selbsttätig auf eine andere Taste aus und schreibt unten ins Overlay, auf welche. |
 | Keine Ansagen | Mit `Strg+Alt+S` prüfen (Symbol oben rechts), sonst fehlt ein deutsches Sprachpaket. |
 | Es kommt nie eine Referenzrunde | Jede Runde wurde verworfen. Der Grund steht als Meldung im Overlay – meist "im Spiel als ungültig gewertet" (Strecke verlassen) oder "Boxengasse". |
 | Keine Ideallinie zu sehen | Der Grund steht als eigene Zeile im Overlay – meist fehlen noch Runden. Sonst mit `Strg+Alt+L` prüfen, ob sie überhaupt an ist. |
+| "n Runden gefahren, aber keine Streckendaten" | AMS2 meldet keine Fahrzeugposition, deshalb wächst die Streckenkarte nicht. Shared Memory in AMS2 auf *Project CARS 2* stellen und das Spiel neu starten. |
+| Die Linie kommt auf einer Strecke nie, auf anderen schon | Die gespeicherte Karte passte nicht mehr. Der Coach sagt das jetzt und lernt neu – nach drei Runden ist sie da. Notfalls die Datei unter `%LocalAppData%\DrivingCoach\strecken\` löschen. |
 | Die Linie liegt neben der Fahrbahn oder in der Luft | Noch nicht eingemessen: `Strg+Alt+E`, im Stand auf einer Geraden. |
 | Die Linie wandert beim Bremsen und in Kurven | In AMS2 stehen `World Movement`, `G-Force Effect` oder die Kopfbewegung noch nicht auf 0. |
 | Die Linie sitzt, aber nur in einem Auto | Kalibriert wird je Fahrzeug. In der anderen Klasse einmal `Strg+Alt+E`. |

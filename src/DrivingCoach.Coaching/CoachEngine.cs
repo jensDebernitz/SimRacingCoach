@@ -341,10 +341,18 @@ public sealed class CoachEngine : IDisposable
             return;
         }
 
+        // Die Referenz von vor dieser Runde. Verglichen wird gegen die Zeit,
+        // die der Fahrer gejagt hat, nicht gegen die, die er gerade gesetzt hat.
         RecordedLap? reference;
+
+        // Die Referenz danach – für die Ideallinie, die das Können des Autos
+        // aus der besten bekannten Runde abliest und deshalb die neuere will.
+        RecordedLap? current;
+
         LapAnalysis? analysis = null;
         bool isNewBest;
-        TrackMap? learned = null;
+        TrackMap? learned;
+        bool mapRestarted;
 
         lock (_gate)
         {
@@ -352,7 +360,7 @@ public sealed class CoachEngine : IDisposable
             reference = State.Reference;
 
             LearnPoseConvention(lap);
-            learned = LearnTrackGeometry(lap);
+            (learned, mapRestarted) = LearnTrackGeometry(lap);
 
             if (reference is not null && State.Corners.Count > 0)
             {
@@ -365,6 +373,17 @@ public sealed class CoachEngine : IDisposable
             {
                 ApplyReference(best);
             }
+
+            current = State.Reference;
+        }
+
+        if (mapRestarted)
+        {
+            Raise(
+                CoachMessageKind.Info,
+                "Die gespeicherte Streckenkarte passt nicht mehr zu dieser Strecke – sie wird neu gelernt.",
+                string.Empty,
+                priority: 0);
         }
 
         if (learned is not null)
@@ -372,7 +391,7 @@ public sealed class CoachEngine : IDisposable
             // Außerhalb der Sperre: die Karte ist ein paar hundert Kilobyte,
             // und solange geschrieben wird, soll die Telemetrie weiterlaufen.
             _maps.Save(learned);
-            UpdateIdealLine(learned, reference);
+            UpdateIdealLine(learned, current);
         }
 
         if (isNewBest)
@@ -417,35 +436,60 @@ public sealed class CoachEngine : IDisposable
     /// <summary>
     /// Arbeitet die Runde in die Streckenkarte ein.
     /// </summary>
-    /// <returns>Die geänderte Karte, wenn sie gespeichert werden muss, sonst <c>null</c>.</returns>
+    /// <returns>
+    /// Die geänderte Karte, wenn sie gespeichert werden muss, und ob dafür neu
+    /// begonnen werden musste.
+    /// </returns>
     /// <remarks>
+    /// <para>
     /// Gelernt wird nur aus gültigen Runden. Eine Boxenrunde oder eine mit
     /// Zurücksetzen würde die Mittellinie quer über die Wiese ziehen, und der
     /// Fehler bliebe dauerhaft in der Datei stehen.
+    /// </para>
+    /// <para>
+    /// Passt die gespeicherte Karte nicht zur gefahrenen Runde – AMS2 meldet
+    /// dieselbe Strecke gelegentlich in anderer Länge, etwa bei einer anderen
+    /// Streckenvariante unter gleichem Namen –, wird sie verworfen und neu
+    /// begonnen. Sie stehen zu lassen hieße, dass jede weitere Runde abgelehnt
+    /// wird und die Ideallinie nie wieder erscheint.
+    /// </para>
     /// </remarks>
-    private TrackMap? LearnTrackGeometry(RecordedLap lap)
+    private (TrackMap? Map, bool Restarted) LearnTrackGeometry(RecordedLap lap)
     {
         if (!lap.Channels.HasGeometry)
         {
-            return null;
+            // AMS2 liefert keine Weltkoordinaten. Ohne sie gibt es nichts zu
+            // lernen; die Statuszeile der Linie sagt das dem Fahrer.
+            return (null, false);
         }
 
-        TrackMap map = State.TrackMap ?? TrackMap.Empty(
+        TrackMap? existing = State.TrackMap;
+
+        if (existing is not null && existing.Learn(lap))
+        {
+            State.TrackMap = existing;
+            return (existing, false);
+        }
+
+        bool restarted = existing is not null;
+
+        TrackMap fresh = TrackMap.Empty(
             State.Session.TrackKey,
             State.Session.TrackDisplayName,
             State.Session.TrackLength,
             lap.BinSize,
             lap.Channels.Count);
 
-        if (!map.Learn(lap))
+        if (!fresh.Learn(lap))
         {
-            // Passt nicht zur Karte – etwa weil AMS2 dieselbe Strecke in einer
-            // anderen Länge meldet. Dann lieber nichts lernen als Unsinn.
-            return null;
+            // Eine frische Karte wird genau auf diese Runde zugeschnitten. Dass
+            // sie dieselbe Runde ablehnt, kann nicht passieren – wenn doch, ist
+            // etwas grundsätzlich falsch, und Raten hilft nicht weiter.
+            return (null, false);
         }
 
-        State.TrackMap = map;
-        return map;
+        State.TrackMap = fresh;
+        return (fresh, restarted);
     }
 
     /// <summary>

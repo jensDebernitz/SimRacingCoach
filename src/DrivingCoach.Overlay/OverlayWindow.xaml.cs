@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using DrivingCoach.Coaching;
 using DrivingCoach.Coaching.Model;
 using DrivingCoach.Overlay.Interop;
@@ -42,6 +43,20 @@ public partial class OverlayWindow : Window
     private readonly IdealLinePresenter? _presenter;
 
     private readonly CalibrationTuner _tuner = new();
+
+    /// <summary>
+    /// Holt beide Fenster regelmäßig wieder nach vorn.
+    /// </summary>
+    /// <remarks>
+    /// Ein Sekundentakt genügt: Der Platz geht nur verloren, wenn sich ein
+    /// anderes Fenster als "immer oben" anmeldet – beim Start von AMS2 und beim
+    /// Wechsel in den Vollbildmodus. Häufiger zu prüfen brächte nichts, seltener
+    /// hieße, sekundenlang hinter dem Spiel zu liegen.
+    /// </remarks>
+    private readonly DispatcherTimer _topmostGuard = new(DispatcherPriority.Background)
+    {
+        Interval = TimeSpan.FromSeconds(1.0),
+    };
 
     public OverlayWindow(
         OverlayViewModel viewModel,
@@ -92,8 +107,26 @@ public partial class OverlayWindow : Window
 
         ShowLine(_viewModel.LineOn);
 
+        _topmostGuard.Tick += OnTopmostGuardTick;
+        _topmostGuard.Start();
+
         _viewModel.Start();
         _engine.Start();
+    }
+
+    /// <summary>
+    /// Sorgt dafür, dass der Coach vor dem Spiel liegt und nicht dahinter.
+    /// </summary>
+    /// <remarks>
+    /// Reihenfolge von unten nach oben: erst das bildschirmfüllende
+    /// Linienfenster, dann die Anzeige. Andersherum läge die Linie über der
+    /// Anzeige und würde sie verdecken.
+    /// </remarks>
+    private void OnTopmostGuardTick(object? sender, EventArgs e)
+    {
+        _line?.KeepOnTop();
+
+        NativeMethods.BringToTop(new WindowInteropHelper(this).Handle);
     }
 
     /// <summary>
@@ -109,13 +142,30 @@ public partial class OverlayWindow : Window
         Top = Math.Clamp(Top, SystemParameters.VirtualScreenTop, Math.Max(SystemParameters.VirtualScreenTop, maxTop));
     }
 
+    /// <summary>
+    /// Schreibt die Belegung so in die Hilfe, wie sie tatsächlich zustande kam.
+    /// </summary>
+    /// <remarks>
+    /// Nicht die Wunschbelegung: Ist Strg+Alt+M von einem anderen Programm
+    /// besetzt, liegt das Verschieben auf Strg+Alt+V – und dann muss unten auch
+    /// Strg+Alt+V stehen. Eine Hilfe, die etwas anderes behauptet als das, was
+    /// passiert, ist schlimmer als keine.
+    /// </remarks>
     private void UpdateHotkeyHelp()
     {
-        string help = string.Join("  ·  ", HotkeyManager.Descriptions);
+        var lines = new List<string> { string.Join("  ·  ", _hotkeys.Descriptions) };
 
-        _viewModel.HotkeyHelp = _hotkeys.Failed.Count == 0
-            ? help
-            : $"{help}\nBelegt von einem anderen Programm: {string.Join(", ", _hotkeys.Failed)}";
+        if (_hotkeys.Moved.Count > 0)
+        {
+            lines.Add($"Belegt von einem anderen Programm, deshalb verlegt: {string.Join(" · ", _hotkeys.Moved)}");
+        }
+
+        if (_hotkeys.Failed.Count > 0)
+        {
+            lines.Add($"Gar keine Taste frei für: {string.Join(", ", _hotkeys.Failed)}");
+        }
+
+        _viewModel.HotkeyHelp = string.Join("\n", lines);
     }
 
     private void OnHotkey(HotkeyAction action)
@@ -351,6 +401,9 @@ public partial class OverlayWindow : Window
             ShowIdealLine = _viewModel.LineOn,
         };
         _settings.Save();
+
+        _topmostGuard.Stop();
+        _topmostGuard.Tick -= OnTopmostGuardTick;
 
         _hotkeys.Pressed -= OnHotkey;
         _hotkeys.Dispose();

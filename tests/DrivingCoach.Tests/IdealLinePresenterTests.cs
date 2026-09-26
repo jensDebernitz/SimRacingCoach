@@ -42,6 +42,7 @@ public class IdealLinePresenterTests : IDisposable
         CoachState state = Ready();
         state.IdealLine = null;
         state.ValidLapCount = 2;
+        state.TrackMap = MapFrom(VirtualDriver.DriveLaps(2));
 
         Assert.Empty(_presenter.Build(state, Width, Height));
         Assert.Contains("wird gelernt", _presenter.Status);
@@ -56,6 +57,58 @@ public class IdealLinePresenterTests : IDisposable
 
         Assert.Empty(_presenter.Build(state, Width, Height));
         Assert.Contains("keine gültige Runde", _presenter.Status);
+    }
+
+    /// <summary>
+    /// Der Hinweis muss zählen, was in der Karte steht, nicht was gefahren
+    /// wurde.
+    /// </summary>
+    /// <remarks>
+    /// Beides lief früher unter derselben Zahl. Wer neun Runden gefahren war
+    /// und "wird gelernt (9 Runden)" las, hielt den Coach für geduldig, während
+    /// die Karte in Wahrheit bei zwei Runden feststeckte – der Hinweis nannte
+    /// eine Zahl, die mit der Ideallinie nichts zu tun hatte.
+    /// </remarks>
+    [Fact]
+    public void Der_Hinweis_zaehlt_die_gelernten_Runden_nicht_die_gefahrenen()
+    {
+        CoachState state = Ready();
+        state.IdealLine = null;
+        state.ValidLapCount = 9;
+        state.TrackMap = MapFrom(VirtualDriver.DriveLaps(2));
+
+        _presenter.Build(state, Width, Height);
+
+        Assert.Contains($"2 von {TrackMap.MinimumLaps}", _presenter.Status);
+        Assert.DoesNotContain("9", _presenter.Status);
+    }
+
+    /// <summary>
+    /// Der Fall, der sich nicht aussitzen lässt: Ohne Weltkoordinaten wächst
+    /// die Karte nie, egal wie lange gefahren wird. Das muss dastehen, sonst
+    /// wartet der Fahrer auf etwas, das nicht kommt.
+    /// </summary>
+    [Fact]
+    public void Runden_ohne_Streckendaten_werden_benannt()
+    {
+        CoachState state = Ready();
+        state.IdealLine = null;
+        state.ValidLapCount = 5;
+        state.TrackMap = null;
+
+        Assert.Empty(_presenter.Build(state, Width, Height));
+        Assert.Contains("keine Streckendaten", _presenter.Status);
+    }
+
+    [Fact]
+    public void Ohne_Referenzrunde_sagt_der_Hinweis_worauf_gewartet_wird()
+    {
+        CoachState state = Ready();
+        state.IdealLine = null;
+        state.Reference = null;
+
+        Assert.Empty(_presenter.Build(state, Width, Height));
+        Assert.Contains("Referenzrunde", _presenter.Status);
     }
 
     /// <summary>
@@ -143,6 +196,26 @@ public class IdealLinePresenterTests : IDisposable
         Assert.True(narrow > wide, $"Eng {narrow:0.0} px, weit {wide:0.0} px – der Blickwinkel bleibt wirkungslos.");
     }
 
+    /// <summary>Eine Streckenkarte, in die genau diese Runden eingeflossen sind.</summary>
+    private static TrackMap MapFrom(IReadOnlyList<RecordedLap> laps)
+    {
+        RecordedLap first = laps[0];
+
+        TrackMap map = TrackMap.Empty(
+            VirtualDriver.Session.TrackKey,
+            VirtualDriver.Session.TrackDisplayName,
+            first.TrackLength,
+            first.BinSize,
+            first.Channels.Count);
+
+        foreach (RecordedLap lap in laps)
+        {
+            Assert.True(map.Learn(lap), "Die Karte hat eine Runde abgelehnt, die zu ihr passen müsste.");
+        }
+
+        return map;
+    }
+
     private static float BandWidth(IReadOnlyList<RibbonPoint> ribbon)
     {
         Assert.NotEmpty(ribbon);
@@ -158,17 +231,7 @@ public class IdealLinePresenterTests : IDisposable
         List<RecordedLap> driven = VirtualDriver.DriveLaps(4);
         RecordedLap first = driven[0];
 
-        TrackMap map = TrackMap.Empty(
-            VirtualDriver.Session.TrackKey,
-            VirtualDriver.Session.TrackDisplayName,
-            first.TrackLength,
-            first.BinSize,
-            first.Channels.Count);
-
-        foreach (RecordedLap lap in driven)
-        {
-            map.Learn(lap);
-        }
+        TrackMap map = MapFrom(driven);
 
         SimTrack track = SimTrack.Default;
         const float lapDistance = 500f;
@@ -177,6 +240,7 @@ public class IdealLinePresenterTests : IDisposable
         {
             Session = VirtualDriver.Session,
             ValidLapCount = driven.Count,
+            Reference = first,
             TrackMap = map,
             IdealLine = IdealLineSolver.Solve(map, GripEstimate.Default, topSpeed: 78f),
             Pose = PoseConvention.Learn(first) ?? PoseConvention.Assumed,
