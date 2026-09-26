@@ -1,0 +1,29 @@
+# Build
+bin/
+obj/
+publish/
+[Rr]eleases/
+artifacts/
+*.user
+*.suo
+
+# Velopack
+release-notes.md
+
+# IDE
+.vs/
+.idea/
+.vscode/
+*.swp
+
+# Betriebssystem
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Niemals ins Repository: der Gemini-Schlüssel gehört nach
+# %LocalAppData%\DrivingCoach\ai.json oder in GEMINI_API_KEY.
+ai.json
+*.key
+*.pfx
+*.snk

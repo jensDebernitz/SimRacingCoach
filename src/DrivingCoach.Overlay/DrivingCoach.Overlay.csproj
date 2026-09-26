@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Velopack baut den Dateinamen der Anwendung in das Paket ein; er darf
+         sich zwischen zwei Versionen nicht ändern, sonst findet das Update den
+         Einstiegspunkt nicht wieder. -->
+    <AssemblyName>DrivingCoach</AssemblyName>
+
+    <!-- Wird vom Build aus dem Git-Tag überschrieben (siehe release.yml). -->
+    <Version>0.1.0</Version>
+    <Product>Sim Racing Coach</Product>
+    <Company>Jens Debernitz</Company>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- WPF erzeugt sich sonst selbst ein Program.Main. Velopack muss aber als
+         Allererstes laufen, noch vor jedem WPF-Aufruf, deshalb der eigene
+         Einstiegspunkt in App.xaml.cs. Damit beides nicht kollidiert, wird
+         App.xaml unten von ApplicationDefinition auf Page umgestellt. -->
+    <StartupObject>DrivingCoach.Overlay.App</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Die einzige PackageReference der Projektmappe. Sie kostet den Vorzug,
+         ganz ohne Paket-Server zu bauen – dafür gibt es Installer und
+         automatische Updates, die sich von Hand nicht seriös nachbauen lassen. -->
+    <PackageReference Include="Velopack" Version="1.2.158" />
+
+    <ProjectReference Include="..\DrivingCoach.Ai\DrivingCoach.Ai.csproj" />
+    <ProjectReference Include="..\DrivingCoach.Coaching\DrivingCoach.Coaching.csproj" />
+    <ProjectReference Include="..\DrivingCoach.Telemetry\DrivingCoach.Telemetry.csproj" />
+  </ItemGroup>
+
+</Project>

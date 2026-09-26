@@ -1,0 +1,170 @@
+name: Release
+
+# Ein Tag wie v1.2.0 löst die Veröffentlichung aus. Velopack findet das
+# Ergebnis danach von selbst: Die Anwendung fragt beim Start die Releases
+# dieses Repositories ab und lädt die neue Version im Hintergrund.
+#
+# Vorabversionen gehen genauso: v1.3.0-beta.1 wird unten automatisch als
+# Pre-Release markiert und nur von Installationen gefunden, die danach suchen.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version ohne v, z.B. 1.2.0'
+        required: true
+
+permissions:
+  # Ohne das darf GITHUB_TOKEN kein Release anlegen.
+  contents: write
+
+env:
+  PACK_ID: SimRacingCoach
+  PACK_TITLE: Sim Racing Coach
+  PACK_AUTHORS: Jens Debernitz
+  MAIN_EXE: DrivingCoach.exe
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Velopack braucht die Historie nicht, die Release-Notizen unten
+          # holen sich aber die Tag-Beschreibung.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Version aus dem Tag ableiten
+        id: version
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            'v${{ github.event.inputs.version }}'
+          } else {
+            '${{ github.ref_name }}'
+          }
+
+          $version = $tag -replace '^v', ''
+
+          # Velopack besteht auf SemVer. Lieber hier abbrechen als ein Release
+          # bauen, das die Anwendung nachher nicht einordnen kann.
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            throw "Tag '$tag' ist keine SemVer-Version. Erwartet: v1.2.3 oder v1.2.3-beta.1"
+          }
+
+          # Alles mit Bindestrich ist eine Vorabversion.
+          $pre = if ($version -match '-') { 'true' } else { 'false' }
+
+          "tag=$tag"          >> $env:GITHUB_OUTPUT
+          "version=$version"  >> $env:GITHUB_OUTPUT
+          "prerelease=$pre"   >> $env:GITHUB_OUTPUT
+
+          Write-Host "Version $version (Vorabversion: $pre)"
+
+      - name: Testen
+        # Ein kaputtes Release lässt sich nicht zurückrufen – die Anwendung
+        # hätte es bei den Nutzern schon installiert, bevor es jemand merkt.
+        run: dotnet test DrivingCoach.slnx -c Release
+
+      - name: Veröffentlichen
+        run: >
+          dotnet publish src/DrivingCoach.Overlay/DrivingCoach.Overlay.csproj
+          -c Release
+          -r win-x64
+          --self-contained false
+          -p:Version=${{ steps.version.outputs.version }}
+          -o publish
+
+      - name: vpk installieren
+        run: dotnet tool install -g vpk
+
+      - name: Release-Notizen aus der Tag-Beschreibung
+        id: notes
+        shell: pwsh
+        run: |
+          $path = "release-notes.md"
+
+          # Nur ein annotierter Tag (git tag -a) hat eine Beschreibung. Bei
+          # einem einfachen Tag steht dort der Commit-Betreff, der als
+          # Release-Notiz nichts taugt.
+          $message = git tag -l --format='%(contents)' '${{ steps.version.outputs.tag }}'
+
+          if ([string]::IsNullOrWhiteSpace($message)) {
+            Write-Host "Kein annotierter Tag – ohne Release-Notizen."
+            "path=" >> $env:GITHUB_OUTPUT
+          } else {
+            Set-Content -Path $path -Value $message -Encoding utf8
+            "path=$path" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Vorherige Releases holen
+        # Nur damit vpk Delta-Pakete bauen kann: Wer schon eine ältere Version
+        # hat, lädt dann ein paar hundert Kilobyte statt des ganzen Pakets.
+        # Beim allerersten Release gibt es nichts zu holen, deshalb darf der
+        # Schritt scheitern.
+        continue-on-error: true
+        run: >
+          vpk download github
+          --repoUrl ${{ github.server_url }}/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --outputDir Releases
+
+      - name: Paket bauen
+        shell: pwsh
+        run: |
+          $arguments = @(
+            'pack'
+            '--packId',      '${{ env.PACK_ID }}'
+            '--packVersion', '${{ steps.version.outputs.version }}'
+            '--packDir',     'publish'
+            '--mainExe',     '${{ env.MAIN_EXE }}'
+            '--packTitle',   '${{ env.PACK_TITLE }}'
+            '--packAuthors', '${{ env.PACK_AUTHORS }}'
+            '--runtime',     'win-x64'
+            # Velopack installiert die .NET-Laufzeit beim Setup mit, falls sie
+            # fehlt. Deshalb reicht das schlanke framework-abhängige Publish.
+            '--framework',   'net10.0-x64-desktop'
+            '--outputDir',   'Releases'
+          )
+
+          if ('${{ steps.notes.outputs.path }}') {
+            $arguments += @('--releaseNotes', '${{ steps.notes.outputs.path }}')
+          }
+
+          vpk @arguments
+
+      - name: Hochladen und veröffentlichen
+        shell: pwsh
+        run: |
+          $arguments = @(
+            'upload', 'github'
+            '--repoUrl',     '${{ github.server_url }}/${{ github.repository }}'
+            '--token',       '${{ secrets.GITHUB_TOKEN }}'
+            '--outputDir',   'Releases'
+            '--tag',         '${{ steps.version.outputs.tag }}'
+            '--releaseName', '${{ env.PACK_TITLE }} ${{ steps.version.outputs.version }}'
+            # Ohne --publish bliebe das Release ein Entwurf, und kein
+            # installierter Coach fände es je.
+            '--publish'
+          )
+
+          if ('${{ steps.version.outputs.prerelease }}' -eq 'true') {
+            $arguments += '--pre'
+          }
+
+          vpk @arguments
+
+      - name: Artefakte anhängen
+        # Der Lauf soll auch dann noch nachvollziehbar sein, wenn das Release
+        # später von Hand geändert oder gelöscht wird.
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACK_ID }}-${{ steps.version.outputs.version }}
+          path: Releases

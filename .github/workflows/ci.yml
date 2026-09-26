@@ -1,0 +1,33 @@
+name: CI
+
+# Jeder Push und jeder Pull Request gegen main. Absichtlich ohne Tags: die
+# behandelt release.yml, sonst liefen beide Läufe gleichzeitig über denselben
+# Stand.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    # WPF baut nicht auf Linux. Der Windows-Runner ist keine Bequemlichkeit,
+    # sondern Voraussetzung.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Wiederherstellen
+        run: dotnet restore DrivingCoach.slnx
+
+      - name: Bauen
+        run: dotnet build DrivingCoach.slnx -c Release --no-restore
+
+      - name: Testen
+        run: dotnet test DrivingCoach.slnx -c Release --no-build --verbosity normal

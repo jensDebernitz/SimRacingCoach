@@ -1,0 +1,152 @@
+<Window x:Class="DrivingCoach.Overlay.CoachDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Coach fragen"
+        Width="560"
+        Height="440"
+        MinWidth="380"
+        MinHeight="260"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display"
+        FontFamily="Segoe UI">
+
+    <Border Padding="12,10"
+            CornerRadius="8"
+            Background="#F2101418"
+            BorderBrush="{StaticResource PanelBorderBrush}"
+            BorderThickness="1">
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <!-- Kopfzeile -->
+                <RowDefinition Height="*" />
+                <!-- Verlauf -->
+                <RowDefinition Height="Auto" />
+                <!-- Eingabe -->
+                <RowDefinition Height="Auto" />
+                <!-- Hilfe -->
+            </Grid.RowDefinitions>
+
+            <!-- ===== Kopfzeile (zugleich Griff zum Verschieben) ===== -->
+            <Grid Grid.Row="0" Margin="0,0,0,8" Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource BodyText}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Text="Coach fragen" />
+                    <TextBlock Style="{StaticResource LabelText}"
+                               Margin="0,1,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding Subtitle}" />
+                </StackPanel>
+
+                <TextBlock Grid.Column="1"
+                           Style="{StaticResource LabelText}"
+                           VerticalAlignment="Top"
+                           Text="Esc schließt" />
+            </Grid>
+
+            <!-- ===== Verlauf ===== -->
+            <ScrollViewer Grid.Row="1"
+                          x:Name="Scroller"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Padding="0,0,6,0">
+                <ItemsControl ItemsSource="{Binding Entries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="3" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Rectangle Grid.Column="0"
+                                           Fill="{Binding Accent}"
+                                           RadiusX="1.5"
+                                           RadiusY="1.5" />
+
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock Style="{StaticResource LabelText}"
+                                               Foreground="{Binding Accent}"
+                                               Text="{Binding Speaker}" />
+
+                                    <!-- TextBox statt TextBlock: so lässt sich
+                                         der Trainingsplan herauskopieren. -->
+                                    <TextBox Margin="0,2,0,0"
+                                             Text="{Binding Text, Mode=OneWay}"
+                                             IsReadOnly="True"
+                                             BorderThickness="0"
+                                             Background="Transparent"
+                                             Foreground="{StaticResource TextBrush}"
+                                             FontSize="12.5"
+                                             TextWrapping="Wrap"
+                                             IsTabStop="False"
+                                             Padding="0" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- ===== Eingabe ===== -->
+            <Grid Grid.Row="2" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBox Grid.Column="0"
+                         x:Name="Input"
+                         MinHeight="30"
+                         MaxHeight="90"
+                         Padding="7,5"
+                         Background="#1AFFFFFF"
+                         Foreground="{StaticResource TextBrush}"
+                         CaretBrush="{StaticResource TextBrush}"
+                         BorderBrush="{StaticResource PanelBorderBrush}"
+                         BorderThickness="1"
+                         FontSize="13"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         IsEnabled="{Binding CanAsk}"
+                         PreviewKeyDown="OnInputKeyDown" />
+
+                <Button Grid.Column="1"
+                        x:Name="SendButton"
+                        Margin="8,0,0,0"
+                        Padding="14,0"
+                        MinHeight="30"
+                        Content="Fragen"
+                        Foreground="{StaticResource TextBrush}"
+                        Background="#1AFFFFFF"
+                        BorderBrush="{StaticResource PanelBorderBrush}"
+                        BorderThickness="1"
+                        IsEnabled="{Binding CanAsk}"
+                        Click="OnSendClick" />
+            </Grid>
+
+            <!-- ===== Hilfe ===== -->
+            <TextBlock Grid.Row="3"
+                       Margin="0,6,0,0"
+                       Style="{StaticResource LabelText}"
+                       TextWrapping="Wrap"
+                       Text="{Binding Hint}" />
+        </Grid>
+    </Border>
+</Window>

@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\DrivingCoach.Telemetry\DrivingCoach.Telemetry.csproj" />
+
+    <!-- Der Coach-Zustand wird sonst nur vom Motor selbst geschrieben. Für
+         einen Test lässt er sich damit nicht stellen, ohne erst mehrere Runden
+         zu fahren und auf die nebenher gerechnete Ideallinie zu warten. -->
+    <InternalsVisibleTo Include="DrivingCoach.Tests" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

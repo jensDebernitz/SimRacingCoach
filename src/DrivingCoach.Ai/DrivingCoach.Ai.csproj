@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Das Auswerten der Modellantwort ist der Teil, der am ehesten bricht –
+         und er muss ohne Netz prüfbar sein. Deshalb sind ApplyDebrief und
+         ApplyFaultVariants internal statt privat. -->
+    <InternalsVisibleTo Include="DrivingCoach.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Keine PackageReference: die Gemini-Schnittstelle ist schlichtes REST,
+         das HttpClient und System.Text.Json aus der Laufzeit erledigen. Damit
+         bleibt die Projektmappe auch ohne Paket-Server baubar. -->
+    <ProjectReference Include="..\DrivingCoach.Coaching\DrivingCoach.Coaching.csproj" />
+    <ProjectReference Include="..\DrivingCoach.Telemetry\DrivingCoach.Telemetry.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DrivingCoach.Ai/DrivingCoach.Ai.csproj" />
+    <Project Path="src/DrivingCoach.Coaching/DrivingCoach.Coaching.csproj" />
+    <Project Path="src/DrivingCoach.Overlay/DrivingCoach.Overlay.csproj" />
+    <Project Path="src/DrivingCoach.Telemetry/DrivingCoach.Telemetry.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DrivingCoach.Tests/DrivingCoach.Tests.csproj" />
+  </Folder>
+</Solution>

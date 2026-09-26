@@ -1,0 +1,348 @@
+<Window x:Class="DrivingCoach.Overlay.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="clr-namespace:DrivingCoach.Overlay.Controls"
+        Title="Driving Coach"
+        Width="380"
+        SizeToContent="Height"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        FontFamily="Segoe UI">
+
+    <Border Padding="10,8"
+            CornerRadius="8"
+            Background="{StaticResource PanelBrush}"
+            BorderThickness="1">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
+                <Style.Triggers>
+                    <!-- Im Verschiebemodus muss sofort sichtbar sein, dass
+                         Klicks jetzt am Overlay hängen bleiben. -->
+                    <DataTrigger Binding="{Binding IsMoveMode}" Value="True">
+                        <Setter Property="BorderBrush" Value="{StaticResource MoveModeBorderBrush}" />
+                        <Setter Property="BorderThickness" Value="2" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <!-- Statuszeile -->
+                <RowDefinition Height="Auto" />
+                <!-- Delta -->
+                <RowDefinition Height="Auto" />
+                <!-- Zeiten -->
+                <RowDefinition Height="Auto" />
+                <!-- Kurve voraus -->
+                <RowDefinition Height="Auto" />
+                <!-- Eingaben + Tempo -->
+                <RowDefinition Height="Auto" />
+                <!-- Meldungen -->
+                <RowDefinition Height="Auto" />
+                <!-- Kurvenbericht -->
+                <RowDefinition Height="Auto" />
+                <!-- Hilfe -->
+                <RowDefinition Height="Auto" />
+                <!-- Einmessen -->
+            </Grid.RowDefinitions>
+
+            <!-- ===== Statuszeile ===== -->
+            <Grid Grid.Row="0" Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Ellipse Grid.Column="0" Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
+                    <Ellipse.Style>
+                        <Style TargetType="Ellipse">
+                            <Setter Property="Fill" Value="{StaticResource OfflineBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                    <Setter Property="Fill" Value="{StaticResource FasterBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Ellipse.Style>
+                </Ellipse>
+
+                <TextBlock Grid.Column="1"
+                           Style="{StaticResource LabelText}"
+                           VerticalAlignment="Center"
+                           Text="{Binding StatusHeadline}" />
+
+                <TextBlock Grid.Column="2"
+                           Style="{StaticResource LabelText}"
+                           VerticalAlignment="Center"
+                           Margin="8,0,8,0"
+                           TextTrimming="CharacterEllipsis"
+                           HorizontalAlignment="Right"
+                           Text="{Binding SessionLine}" />
+
+                <!-- Text und Farbe kommen aus dem Stil, nicht als Attribut:
+                     ein lokal gesetzter Wert hätte Vorrang vor dem Trigger
+                     und das Symbol bliebe beim Stummschalten stehen. -->
+                <TextBlock Grid.Column="3" VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource LabelText}">
+                            <Setter Property="Text" Value="🔊" />
+                            <Setter Property="Foreground" Value="{StaticResource FasterBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SpeechOn}" Value="False">
+                                    <Setter Property="Text" Value="🔇" />
+                                    <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+
+            <!-- ===== Delta-Balken ===== -->
+            <Grid Grid.Row="1" Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ctl:DeltaBar Grid.Column="0"
+                              Height="22"
+                              VerticalAlignment="Center"
+                              Delta="{Binding Delta}"
+                              IsActive="{Binding DeltaIsActive}"
+                              Range="1.0" />
+
+                <TextBlock Grid.Column="1"
+                           Margin="10,0,2,0"
+                           VerticalAlignment="Center"
+                           FontFamily="Consolas"
+                           FontSize="26"
+                           FontWeight="Bold"
+                           MinWidth="86"
+                           TextAlignment="Right"
+                           Text="{Binding DeltaText}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource SlowerBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DeltaIsFaster}" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource FasterBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DeltaIsActive}" Value="False">
+                                    <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+
+            <!-- ===== Zeiten ===== -->
+            <Grid Grid.Row="2" Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource LabelText}" Text="RUNDE" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource ValueText}" Text="{Binding CurrentLapText}" />
+
+                <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource LabelText}" Text="PROGNOSE" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" Text="{Binding PredictedLapText}" />
+
+                <TextBlock Grid.Row="0" Grid.Column="2" Style="{StaticResource LabelText}" Text="REFERENZ" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource ValueText}" Text="{Binding ReferenceLapText}" />
+            </Grid>
+
+            <!-- ===== Kurve voraus ===== -->
+            <TextBlock Grid.Row="3"
+                       Margin="0,0,0,6"
+                       Style="{StaticResource BodyText}"
+                       Foreground="{StaticResource WarnBrush}"
+                       TextTrimming="CharacterEllipsis"
+                       TextWrapping="NoWrap"
+                       Text="{Binding UpcomingCornerText}"
+                       Visibility="{Binding HasUpcomingCorner, Converter={StaticResource BoolToVisibility}}" />
+
+            <!-- ===== Eingaben + Tempo ===== -->
+            <Grid Grid.Row="4" Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <ctl:InputTrace Height="56" History="{Binding Inputs}" />
+                    <ProgressBar Height="4"
+                                 Margin="0,3,0,0"
+                                 Value="{Binding RpmFraction, Mode=OneWay}">
+                        <ProgressBar.Style>
+                            <Style TargetType="ProgressBar" BasedOn="{StaticResource RpmBar}">
+                                <Style.Triggers>
+                                    <!-- Schaltempfehlung: das Band wird gelb,
+                                         bevor der Begrenzer greift. -->
+                                    <DataTrigger Binding="{Binding ShouldShift}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ProgressBar.Style>
+                    </ProgressBar>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Margin="10,0,2,0" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock FontSize="28"
+                               FontWeight="Bold"
+                               TextAlignment="Center"
+                               Text="{Binding GearText}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource ValueText}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ShouldShift}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Style="{StaticResource ValueText}" FontSize="17" Text="{Binding SpeedText}" />
+                        <TextBlock Style="{StaticResource LabelText}" Margin="3,0,0,2" VerticalAlignment="Bottom" Text="km/h" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
+            <!-- ===== Meldungen ===== -->
+            <ItemsControl Grid.Row="5" ItemsSource="{Binding Messages}" Margin="0,0,0,4">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,0,0,3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="3" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Rectangle Grid.Column="0" Fill="{Binding Accent}" RadiusX="1.5" RadiusY="1.5" />
+                            <TextBlock Grid.Column="1"
+                                       Margin="7,0,0,0"
+                                       Style="{StaticResource BodyText}"
+                                       Text="{Binding Text}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- ===== Kurvenbericht der letzten Runde ===== -->
+            <StackPanel Grid.Row="6"
+                        Visibility="{Binding ShowCornerReport, Converter={StaticResource BoolToVisibility}}">
+                <Rectangle Height="1" Fill="#22FFFFFF" Margin="0,2,0,4" />
+                <TextBlock Style="{StaticResource LabelText}" Text="{Binding ReportHeader}" Margin="0,0,0,3" />
+
+                <ItemsControl ItemsSource="{Binding CornerReport}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="58" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0"
+                                           Style="{StaticResource BodyText}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{Binding Accent}"
+                                           Text="{Binding Corner}" />
+
+                                <TextBlock Grid.Column="1"
+                                           Style="{StaticResource BodyText}"
+                                           Text="{Binding Text}" />
+
+                                <TextBlock Grid.Column="2"
+                                           Style="{StaticResource BodyText}"
+                                           Margin="6,0,0,0"
+                                           FontFamily="Consolas"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           Text="{Binding TimeLost}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- ===== Hilfe / Referenzhinweis ===== -->
+            <StackPanel Grid.Row="7" Margin="0,4,0,0">
+                <Rectangle Height="1" Fill="#22FFFFFF" Margin="0,0,0,4" />
+                <TextBlock Style="{StaticResource LabelText}" Text="{Binding ReferenceHint}" />
+                <TextBlock Style="{StaticResource LabelText}"
+                           Margin="0,2,0,0"
+                           TextWrapping="Wrap"
+                           Text="{Binding LineStatus}" />
+                <TextBlock Style="{StaticResource LabelText}"
+                           Margin="0,2,0,0"
+                           TextWrapping="Wrap"
+                           Text="{Binding AiStatus}" />
+                <TextBlock Style="{StaticResource LabelText}"
+                           Margin="0,2,0,0"
+                           TextWrapping="Wrap"
+                           Text="{Binding VersionStatus}" />
+                <TextBlock Style="{StaticResource LabelText}"
+                           Margin="0,2,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource MutedBrush}"
+                           Text="{Binding HotkeyHelp}" />
+                <TextBlock Style="{StaticResource LabelText}"
+                           Margin="0,2,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource WarnBrush}"
+                           Text="{Binding SpeechStatus}" />
+            </StackPanel>
+
+            <!-- ===== Einmessen der Ideallinie ===== -->
+            <Border Grid.Row="8"
+                    Margin="0,6,0,0"
+                    Padding="8,6"
+                    CornerRadius="5"
+                    BorderThickness="1"
+                    BorderBrush="{StaticResource MoveModeBorderBrush}"
+                    Visibility="{Binding IsCalibrating, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource ValueText}"
+                               FontSize="15"
+                               Foreground="{StaticResource WarnBrush}"
+                               Text="{Binding CalibrationText}" />
+
+                    <TextBlock Style="{StaticResource LabelText}"
+                               Margin="0,3,0,0"
+                               TextWrapping="Wrap"
+                               Text="Strg+Alt+←→ Wert wählen · ↑↓ verstellen · Strg+Alt+E fertig" />
+
+                    <TextBlock Style="{StaticResource LabelText}"
+                               Margin="0,3,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource MutedBrush}"
+                               Text="Am besten im Stand auf der Geraden. In AMS2 müssen World Movement, G-Force Effect und Kopfbewegung auf 0 stehen." />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
