@@ -153,6 +153,42 @@ public sealed class OverlayViewModel : INotifyPropertyChanged, IDisposable
 
     #endregion
 
+    #region Bremspunkt
+
+    private bool _hasBrakePoint;
+    public bool HasBrakePoint { get => _hasBrakePoint; private set => Set(ref _hasBrakePoint, value); }
+
+    private string _brakePointText = string.Empty;
+    public string BrakePointText { get => _brakePointText; private set => Set(ref _brakePointText, value); }
+
+    /// <summary>0 am Anfang des Countdowns, 1 am Bremspunkt.</summary>
+    private double _brakePointProgress;
+    public double BrakePointProgress { get => _brakePointProgress; private set => Set(ref _brakePointProgress, value); }
+
+    /// <summary>True in dem Moment, in dem getreten werden muss.</summary>
+    private bool _brakeNow;
+    public bool BrakeNow { get => _brakeNow; private set => Set(ref _brakeNow, value); }
+
+    #endregion
+
+    #region Bremskraft
+
+    private bool _hasBrakeForce;
+    public bool HasBrakeForce { get => _hasBrakeForce; private set => Set(ref _hasBrakeForce, value); }
+
+    private string _brakeForceText = string.Empty;
+    public string BrakeForceText { get => _brakeForceText; private set => Set(ref _brakeForceText, value); }
+
+    /// <summary>Die Füllung zeigt, wie fest tatsächlich getreten wird.</summary>
+    private double _brakeForceValue;
+    public double BrakeForceValue { get => _brakeForceValue; private set => Set(ref _brakeForceValue, value); }
+
+    /// <summary>True, wenn Soll und Ist deutlich auseinanderliegen.</summary>
+    private bool _brakeForceIsOff;
+    public bool BrakeForceIsOff { get => _brakeForceIsOff; private set => Set(ref _brakeForceIsOff, value); }
+
+    #endregion
+
     #region Bedienzustand
 
     private bool _isMoveMode;
@@ -223,10 +259,21 @@ public sealed class OverlayViewModel : INotifyPropertyChanged, IDisposable
         UpdateTimes(state, in frame);
         UpdateCar(in frame);
         UpdateUpcomingCorner(state, in frame);
+        // Erst die laufende Bremsphase, dann der Countdown: Der Countdown tritt
+        // zurück, solange gebremst wird.
+        UpdateBrakeForce(state, in frame);
+        UpdateBrakePoint(state, in frame);
         UpdateReport(state);
         UpdateLine();
 
-        Inputs.Push(frame.Throttle, frame.Brake, frame.Steering);
+        // Außerhalb der Strecke gibt es nichts vorzugeben: In der Box steht die
+        // Rundendistanz still, und die Referenz läge dort als waagerechter
+        // Strich quer durch die Anzeige.
+        Inputs.Push(
+            frame.Throttle,
+            frame.Brake,
+            frame.Steering,
+            frame.IsDriving ? PedalGuide.TargetAt(state.Reference, frame.LapDistance) : null);
 
         DrainMessages(frame.Timestamp);
     }
@@ -304,12 +351,64 @@ public sealed class OverlayViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
-        float metresToBrake = corner.BrakingStartBin * state.Reference.BinSize - frame.LapDistance;
+        float length = BrakeGuide.TrackLengthOf(state);
+        string header = $"{corner.Name} · {corner.SpeedCategory} · Scheitel {corner.ApexSpeedKmh:0} km/h";
 
         HasUpcomingCorner = true;
-        UpcomingCornerText = metresToBrake > 0f
-            ? $"{corner.Name} · {corner.SpeedCategory} · Scheitel {corner.ApexSpeedKmh:0} km/h · in {metresToBrake:0} m"
-            : $"{corner.Name} · Scheitel {corner.ApexSpeedKmh:0} km/h";
+        UpcomingCornerText = state.UpcomingBrakePoint is { } point && length >= 1f
+            ? $"{header} · Bremspunkt in {BrakeGuide.MetresTo(point, frame.LapDistance, length):0} m"
+            : header;
+    }
+
+    /// <summary>
+    /// Füllt den Countdown auf den Bremspunkt.
+    /// </summary>
+    /// <remarks>
+    /// Getrennt von der Kurvenzeile, weil beides verschiedene Fristen hat: Die
+    /// Kurve steht an, sobald sie die nächste ist, der Bremspunkt erst in den
+    /// letzten Sekunden davor. Zusammengelegt wäre entweder das eine zu früh
+    /// oder das andere zu spät.
+    /// </remarks>
+    private void UpdateBrakePoint(CoachState state, in TelemetryFrame frame)
+    {
+        // Die laufende Bremsphase geht vor. In einer Schikane steht der
+        // Bremspunkt der zweiten Kurve schon an, während für die erste noch
+        // gebremst wird – beides gleichzeitig wären zwei Zeilen zu derselben
+        // Stelle der Strecke, und die falsche davon wäre die auffälligere.
+        if (HasBrakeForce || BrakeGuide.CueFor(state, in frame) is not { } cue)
+        {
+            HasBrakePoint = false;
+            BrakeNow = false;
+            return;
+        }
+
+        HasBrakePoint = true;
+        BrakeNow = cue.IsNow;
+        BrakePointText = cue.Text;
+        BrakePointProgress = cue.Progress;
+    }
+
+    /// <summary>
+    /// Stellt während der Bremsphase Soll gegen Ist.
+    /// </summary>
+    /// <remarks>
+    /// Löst den Countdown ab, sobald der Bremspunkt erreicht ist: Bis dahin ist
+    /// die Frage, <em>wann</em> zu treten ist, danach, <em>wie fest</em>. Beides
+    /// belegt deshalb dieselbe Zeile im Overlay, nur nie gleichzeitig.
+    /// </remarks>
+    private void UpdateBrakeForce(CoachState state, in TelemetryFrame frame)
+    {
+        if (BrakeGuide.ForceCueFor(state, in frame) is not { } cue)
+        {
+            HasBrakeForce = false;
+            BrakeForceIsOff = false;
+            return;
+        }
+
+        HasBrakeForce = true;
+        BrakeForceText = cue.Text;
+        BrakeForceValue = cue.Progress;
+        BrakeForceIsOff = cue.IsOff;
     }
 
     /// <summary>
@@ -381,6 +480,14 @@ public sealed class OverlayViewModel : INotifyPropertyChanged, IDisposable
     {
         while (_incoming.TryDequeue(out CoachMessage? message))
         {
+            // Eine Meldung ohne Text ist reine Ansage – der Bremsruf etwa, für
+            // den der Countdown schon dasteht. Sie als leere Karte einzureihen
+            // würde die sichtbaren Meldungen nur verdrängen.
+            if (string.IsNullOrEmpty(message.Text))
+            {
+                continue;
+            }
+
             Messages.Insert(0, new MessageItem(message.Text, AccentFor(message.Kind), message.At));
 
             while (Messages.Count > MaxMessages)

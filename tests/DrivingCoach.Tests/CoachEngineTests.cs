@@ -1,6 +1,7 @@
 using DrivingCoach.Coaching;
 using DrivingCoach.Coaching.Model;
 using DrivingCoach.Telemetry;
+using DrivingCoach.Telemetry.Ams2;
 
 namespace DrivingCoach.Tests;
 
@@ -136,6 +137,163 @@ public sealed class CoachEngineTests : IDisposable
         Assert.All(_speech, text => Assert.False(string.IsNullOrWhiteSpace(text)));
     }
 
+    /// <summary>
+    /// Zwei Runden: in der ersten kennt der Coach die Strecke noch nicht, ab
+    /// der zweiten steht die Referenz und mit ihr die Bremspunkte.
+    /// </summary>
+    [Fact]
+    public void Der_Bremspunkt_wird_angesagt()
+    {
+        Run(VirtualDriver.NeutralStyles(), VirtualDriver.NeutralStyles());
+
+        Assert.Contains(_speech, text => text.StartsWith("Bremsen", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Der Ruf nennt auch, wie fest zu treten ist. Auf der Teststrecke bremst
+    /// das Tempoprofil mit voller Verzögerung, also heißt die Antwort "voll".
+    /// </summary>
+    [Fact]
+    public void Der_Bremsruf_nennt_die_Bremskraft()
+    {
+        Run(VirtualDriver.NeutralStyles(), VirtualDriver.NeutralStyles());
+
+        Assert.Contains("Bremsen, voll", _speech);
+    }
+
+    /// <summary>
+    /// Das Tempoprofil der Teststrecke bremst mit konstanter Verzögerung: Der
+    /// Bremskanal ist ein Rechteck, es gibt darin nichts zu lösen. Der Coach
+    /// darf sich dann auch keinen Lösepunkt ausdenken – bei einem echten Fahrer
+    /// mit Trailbraking sieht der Kanal anders aus.
+    /// </summary>
+    [Fact]
+    public void Ohne_Modulation_kommt_kein_Loeseruf()
+    {
+        Run(VirtualDriver.NeutralStyles(), VirtualDriver.NeutralStyles());
+
+        Assert.DoesNotContain(_messages, m => m.Kind == CoachMessageKind.BrakeRelease);
+    }
+
+    /// <summary>
+    /// Der Bremsruf ist reine Ansage. Er darf keine Meldungskarte erzeugen –
+    /// die stünde neben dem Countdown-Balken, der dasselbe schon sagt, und
+    /// verdrängte dabei den Kurventipp aus der Liste.
+    /// </summary>
+    [Fact]
+    public void Der_Bremsruf_steht_nicht_zusaetzlich_in_den_Meldungen()
+    {
+        Run(VirtualDriver.NeutralStyles(), VirtualDriver.NeutralStyles());
+
+        CoachMessage[] calls = _messages.Where(m => m.Kind == CoachMessageKind.BrakePoint).ToArray();
+
+        Assert.NotEmpty(calls);
+        Assert.All(calls, call => Assert.Equal(string.Empty, call.Text));
+    }
+
+    /// <summary>
+    /// Höchstens ein Ruf je Kurve und Runde. Ohne diese Sperre käme er bei
+    /// 120 Frames je Sekunde hundertfach, solange das Auto im Anfahrfenster ist.
+    /// </summary>
+    [Fact]
+    public void Jede_Kurve_wird_nur_einmal_pro_Runde_gerufen()
+    {
+        CoachEngine coach = Run(VirtualDriver.NeutralStyles(), VirtualDriver.NeutralStyles());
+
+        int calls = _messages.Count(m => m.Kind == CoachMessageKind.BrakePoint);
+        int braking = coach.State.Corners.Count(c => c.HasBrakingZone);
+
+        Assert.InRange(calls, 1, braking);
+    }
+
+    /// <summary>
+    /// Abschaltbar muss er sein: Wer den Bremspunkt im Kopf hat, will keine
+    /// Stimme, die ihn jede Kurve daran erinnert.
+    /// </summary>
+    [Fact]
+    public void Abgeschaltet_kommt_kein_Bremsruf()
+    {
+        Run(new CoachOptions { BrakeCallsEnabled = false }, VirtualDriver.NeutralStyles(), VirtualDriver.NeutralStyles());
+
+        Assert.DoesNotContain(_messages, m => m.Kind == CoachMessageKind.BrakePoint);
+        Assert.DoesNotContain(_messages, m => m.Kind == CoachMessageKind.BrakeRelease);
+        Assert.DoesNotContain(_speech, text => text.StartsWith("Bremsen", StringComparison.Ordinal));
+        Assert.DoesNotContain(_speech, text => text.StartsWith("Lösen", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Der Bremsruf läuft auf einer eigenen Uhr. Auf der gemeinsamen verschluckte
+    /// ihn ausgerechnet der Kurventipp, der dieselbe Kurve meint – der kommt
+    /// 2,5 s vorher, der Ruf 1,2 s vorher.
+    /// </summary>
+    [Fact]
+    public void Ein_Kurventipp_verschluckt_den_Bremsruf_nicht()
+    {
+        var scheduler = new SpeechScheduler(new CoachOptions());
+        var frame = new TelemetryFrame { GameState = GameState.InGamePlaying };
+
+        Assert.True(scheduler.ShouldSpeak(
+            new CoachMessage(CoachMessageKind.CornerTip, "Kurve 6", "Kurve 6, später bremsen", 2, At: 10.0),
+            in frame));
+
+        Assert.True(scheduler.ShouldSpeak(
+            new CoachMessage(CoachMessageKind.BrakePoint, string.Empty, "Bremsen", 3, At: 11.3),
+            in frame));
+    }
+
+    [Fact]
+    public void Zwei_Bremsrufe_kurz_hintereinander_werden_zu_einem()
+    {
+        var options = new CoachOptions();
+        var scheduler = new SpeechScheduler(options);
+        var frame = new TelemetryFrame { GameState = GameState.InGamePlaying };
+
+        CoachMessage Call(double at) =>
+            new(CoachMessageKind.BrakePoint, string.Empty, "Bremsen", 3, At: at);
+
+        Assert.True(scheduler.ShouldSpeak(Call(10.0), in frame));
+        Assert.False(scheduler.ShouldSpeak(Call(10.0 + options.BrakeCallMinGapSeconds - 0.5), in frame));
+        Assert.True(scheduler.ShouldSpeak(Call(10.0 + options.BrakeCallMinGapSeconds + 0.1), in frame));
+    }
+
+    /// <summary>
+    /// "Lösen auf 70" gehört zum "Bremsen" von eben. In einer kurzen Bremszone
+    /// liegen beide keine zwei Sekunden auseinander – ausgerechnet der
+    /// zugehörige Bremsruf darf den Löseruf deshalb nicht verschlucken.
+    /// </summary>
+    [Fact]
+    public void Ein_Bremsruf_verschluckt_den_Loeseruf_nicht()
+    {
+        var scheduler = new SpeechScheduler(new CoachOptions());
+
+        // Mitten im Anbremsen: Über die normale Arbeitslast-Prüfung käme hier
+        // gar nichts mehr durch.
+        var frame = new TelemetryFrame { GameState = GameState.InGamePlaying, Brake = 0.9f };
+
+        Assert.True(scheduler.ShouldSpeak(
+            new CoachMessage(CoachMessageKind.BrakePoint, string.Empty, "Bremsen, voll", 3, At: 10.0),
+            in frame));
+
+        Assert.True(scheduler.ShouldSpeak(
+            new CoachMessage(CoachMessageKind.BrakeRelease, string.Empty, "Lösen auf 70", 3, At: 11.1),
+            in frame));
+    }
+
+    [Fact]
+    public void Zwei_Loeserufe_kurz_hintereinander_werden_zu_einem()
+    {
+        var options = new CoachOptions();
+        var scheduler = new SpeechScheduler(options);
+        var frame = new TelemetryFrame { GameState = GameState.InGamePlaying };
+
+        CoachMessage Call(double at) =>
+            new(CoachMessageKind.BrakeRelease, string.Empty, "Lösen auf 70", 3, At: at);
+
+        Assert.True(scheduler.ShouldSpeak(Call(10.0), in frame));
+        Assert.False(scheduler.ShouldSpeak(Call(10.0 + options.BrakeCallMinGapSeconds - 0.5), in frame));
+        Assert.True(scheduler.ShouldSpeak(Call(10.0 + options.BrakeCallMinGapSeconds + 0.1), in frame));
+    }
+
     [Fact]
     public void Gefahrene_Runden_werden_gezaehlt()
     {
@@ -217,7 +375,9 @@ public sealed class CoachEngineTests : IDisposable
         Assert.Contains(_messages, m => m.Text.Contains("neu gelernt"));
     }
 
-    private CoachEngine Run(params CornerStyle[][] laps)
+    private CoachEngine Run(params CornerStyle[][] laps) => Run(new CoachOptions(), laps);
+
+    private CoachEngine Run(CoachOptions options, params CornerStyle[][] laps)
     {
         var source = new ScriptedTelemetrySource(VirtualDriver.Session, Stitch(laps));
 
@@ -225,7 +385,7 @@ public sealed class CoachEngineTests : IDisposable
         // jeder Testlauf Streckenkarten in die echten Daten des angemeldeten
         // Benutzers.
         var coach = new CoachEngine(
-            source, new LapStore(_directory), new CoachOptions(), maps: new TrackMapStore(_directory));
+            source, new LapStore(_directory), options, maps: new TrackMapStore(_directory));
 
         coach.MessageRaised += _messages.Add;
         coach.SpeechRequested += _speech.Add;

@@ -22,6 +22,14 @@ public sealed record OverlaySettings
     /// <summary>Perspektivische Ideallinie auf der Strecke einblenden.</summary>
     public bool ShowIdealLine { get; init; } = true;
 
+    /// <summary>
+    /// Vergrößerungsfaktor des Overlays. <c>null</c> heißt "noch nie
+    /// eingestellt" – dann sucht sich <see cref="OverlayScale"/> einen Wert, der
+    /// zum Bildschirm passt. Ein fester Vorgabewert würde diesen Unterschied
+    /// verschlucken und die einmal gewählte 100 % nie wieder hinterfragen.
+    /// </summary>
+    public double? Scale { get; init; }
+
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DrivingCoach",

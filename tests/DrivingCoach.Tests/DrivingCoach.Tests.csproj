@@ -1,7 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Windows-Zielrahmen samt WPF, damit auch das Overlay geprüft werden
+         kann. Ohne das bliebe alles unter DrivingCoach.Overlay ungetestet –
+         also unter anderem der Ringpuffer der Eingabe-Anzeige und die
+         Skalierung, beides reine Rechnerei ohne Fenster. Kostet nichts: Die
+         Projektmappe enthält eine WPF-Anwendung, baut also ohnehin nur unter
+         Windows, und die CI läuft dort. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -16,12 +23,21 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+
+    <!-- Mit UseWPF tauscht das SDK den Satz impliziter Usings aus: System.IO
+         fällt heraus, dafür kommt System.Windows.Shapes herein – und damit ein
+         zweiter Typ namens Path, der jeden Aufruf von Path.Combine zweideutig
+         machen würde. Die Tests schreiben Dateien und zeichnen nichts, also
+         gilt hier die umgekehrte Wahl. -->
+    <Using Include="System.IO" />
+    <Using Remove="System.Windows.Shapes" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DrivingCoach.Telemetry\DrivingCoach.Telemetry.csproj" />
     <ProjectReference Include="..\..\src\DrivingCoach.Coaching\DrivingCoach.Coaching.csproj" />
     <ProjectReference Include="..\..\src\DrivingCoach.Ai\DrivingCoach.Ai.csproj" />
+    <ProjectReference Include="..\..\src\DrivingCoach.Overlay\DrivingCoach.Overlay.csproj" />
   </ItemGroup>
 
 </Project>

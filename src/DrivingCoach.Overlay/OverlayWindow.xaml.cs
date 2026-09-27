@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using DrivingCoach.Coaching;
 using DrivingCoach.Coaching.Model;
@@ -25,6 +26,7 @@ public partial class OverlayWindow : Window
 
     private OverlaySettings _settings;
     private bool _isHidden;
+    private double _scale = 1.0;
 
     /// <summary>
     /// Das Frage-Fenster. Optional, damit das Overlay auch ohne die KI-Schicht
@@ -82,6 +84,12 @@ public partial class OverlayWindow : Window
         Left = settings.Left;
         Top = settings.Top;
 
+        // Wer die Größe noch nie angefasst hat, bekommt eine, die zum
+        // Bildschirm passt. Auf 1440 Bildpunkten sind 100 % schlicht zu klein,
+        // und niemand sucht nach einer Taste für ein Problem, von dem er
+        // annimmt, es sei so gedacht.
+        ApplyScale(settings.Scale ?? OverlayScale.ForScreen(SystemParameters.PrimaryScreenHeight));
+
         _voice.Enabled = settings.SpeechEnabled;
         _viewModel.SpeechOn = settings.SpeechEnabled;
         _viewModel.ShowCornerReport = settings.ShowCornerReport;
@@ -130,16 +138,31 @@ public partial class OverlayWindow : Window
     }
 
     /// <summary>
-    /// Holt das Fenster zurück, wenn die gespeicherte Position auf einem
-    /// Monitor lag, der inzwischen nicht mehr angeschlossen ist.
+    /// Holt das Fenster zurück, wenn es über den Bildschirmrand hinausragt –
+    /// weil die gespeicherte Position auf einem inzwischen abgesteckten Monitor
+    /// lag, oder weil es gerade vergrößert wurde.
     /// </summary>
+    /// <remarks>
+    /// Gemessen gegen die tatsächliche Fenstergröße, sobald sie feststeht. Die
+    /// frühere Regel ließ pauschal 80 Bildpunkte stehen; das reichte, solange
+    /// das Overlay eine feste Breite hatte, aber bei 250 % hinge davon fast
+    /// alles über dem Rand. Vor dem ersten Messlauf sind
+    /// <see cref="FrameworkElement.ActualWidth"/> und -Height null – dann bleibt
+    /// es beim alten Zipfel, weil ein Fenster am falschen Fleck immer noch
+    /// besser ist als eines, das gar nicht zu fassen ist.
+    /// </remarks>
     private void EnsureOnScreen()
     {
-        double maxLeft = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 80;
-        double maxTop = SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 80;
+        const double minimumVisible = 80.0;
 
-        Left = Math.Clamp(Left, SystemParameters.VirtualScreenLeft, Math.Max(SystemParameters.VirtualScreenLeft, maxLeft));
-        Top = Math.Clamp(Top, SystemParameters.VirtualScreenTop, Math.Max(SystemParameters.VirtualScreenTop, maxTop));
+        double width = ActualWidth > 0 ? ActualWidth : minimumVisible;
+        double height = ActualHeight > 0 ? ActualHeight : minimumVisible;
+
+        double left = SystemParameters.VirtualScreenLeft;
+        double top = SystemParameters.VirtualScreenTop;
+
+        Left = Math.Clamp(Left, left, Math.Max(left, left + SystemParameters.VirtualScreenWidth - width));
+        Top = Math.Clamp(Top, top, Math.Max(top, top + SystemParameters.VirtualScreenHeight - height));
     }
 
     /// <summary>
@@ -223,7 +246,70 @@ public partial class OverlayWindow : Window
             case HotkeyAction.CalibrationDecrease:
                 TurnKnob(-1);
                 break;
+
+            case HotkeyAction.ScaleUp:
+                ChangeScale(+1);
+                break;
+
+            case HotkeyAction.ScaleDown:
+                ChangeScale(-1);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Setzt die Größe des Overlays.
+    /// </summary>
+    /// <remarks>
+    /// Bei gebrochenen Faktoren sind die Schriftgrade keine ganzen Zahlen mehr.
+    /// <c>Display</c> rastet Glyphen auf ganze Bildpunkte – bei 13 statt 10
+    /// Punkt Schriftgröße fallen die Rundungen dann als ungleiche Buchstaben-
+    /// abstände auf. <c>Ideal</c> rechnet dafür in Zwischenwerten. Bei
+    /// unverändertem Maßstab bleibt es beim schärferen <c>Display</c>.
+    /// </remarks>
+    private void ApplyScale(double scale)
+    {
+        _scale = OverlayScale.Clamp(scale);
+
+        RootScale.ScaleX = _scale;
+        RootScale.ScaleY = _scale;
+
+        TextOptions.SetTextFormattingMode(
+            this,
+            Math.Abs(_scale - 1.0) < 0.001 ? TextFormattingMode.Display : TextFormattingMode.Ideal);
+    }
+
+    private void ChangeScale(int steps)
+    {
+        double wanted = OverlayScale.Clamp(_scale + (steps * OverlayScale.Step));
+
+        if (Math.Abs(wanted - _scale) < 0.001)
+        {
+            // Schon am Anschlag. Ohne die Meldung sähe es aus, als hätte die
+            // Taste gar nicht gegriffen.
+            _engine.PostExternal(
+                CoachMessageKind.Info,
+                $"Overlay-Größe bleibt bei {OverlayScale.Percent(_scale)} % – Anschlag erreicht.",
+                string.Empty);
+            return;
+        }
+
+        ApplyScale(wanted);
+
+        // Das Fenster ist gerade gewachsen; am Bildschirmrand könnte es jetzt
+        // hinausragen. Erst neu messen lassen, sonst rechnet EnsureOnScreen mit
+        // der Breite von vorhin – WPF misst von sich aus erst im nächsten
+        // Durchlauf, und dann steht das Fenster schon einen Wimpernschlag falsch.
+        UpdateLayout();
+        EnsureOnScreen();
+
+        _settings = _settings with { Scale = _scale };
+        _settings.Save();
+
+        _engine.PostExternal(
+            CoachMessageKind.Info,
+            $"Overlay-Größe {OverlayScale.Percent(_scale)} %",
+            string.Empty);
     }
 
     private void ToggleVisibility()
@@ -399,6 +485,7 @@ public partial class OverlayWindow : Window
             SpeechEnabled = _voice.Enabled,
             ShowCornerReport = _viewModel.ShowCornerReport,
             ShowIdealLine = _viewModel.LineOn,
+            Scale = _scale,
         };
         _settings.Save();
 

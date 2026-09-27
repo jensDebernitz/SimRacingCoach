@@ -15,7 +15,7 @@
     <AssemblyName>DrivingCoach</AssemblyName>
 
     <!-- Wird vom Build aus dem Git-Tag überschrieben (siehe release.yml). -->
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Product>Sim Racing Coach</Product>
     <Company>Jens Debernitz</Company>
   </PropertyGroup>

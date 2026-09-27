@@ -3,8 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ctl="clr-namespace:DrivingCoach.Overlay.Controls"
         Title="Driving Coach"
-        Width="380"
-        SizeToContent="Height"
+        SizeToContent="WidthAndHeight"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -22,6 +21,14 @@
             CornerRadius="8"
             Background="{StaticResource PanelBrush}"
             BorderThickness="1">
+        <!-- LayoutTransform, nicht RenderTransform: nur sie geht in die
+             gemessene Größe ein, sodass das Fenster über SizeToContent von
+             selbst mitwächst. Eine RenderTransform würde den Inhalt über den
+             unveränderten Fensterrand hinaus vergrößern. -->
+        <Border.LayoutTransform>
+            <ScaleTransform x:Name="RootScale" />
+        </Border.LayoutTransform>
+
         <Border.Style>
             <Style TargetType="Border">
                 <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
@@ -36,7 +43,9 @@
             </Style>
         </Border.Style>
 
-        <Grid>
+        <!-- Die Grundbreite steht hier und nicht am Fenster: Das Fenster misst
+             sich nach der skalierten Größe dieses Rasters. -->
+        <Grid Width="380">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <!-- Statuszeile -->
@@ -46,6 +55,8 @@
                 <!-- Zeiten -->
                 <RowDefinition Height="Auto" />
                 <!-- Kurve voraus -->
+                <RowDefinition Height="Auto" />
+                <!-- Bremspunkt -->
                 <RowDefinition Height="Auto" />
                 <!-- Eingaben + Tempo -->
                 <RowDefinition Height="Auto" />
@@ -183,8 +194,107 @@
                        Text="{Binding UpcomingCornerText}"
                        Visibility="{Binding HasUpcomingCorner, Converter={StaticResource BoolToVisibility}}" />
 
+            <!-- ===== Bremspunkt und Bremskraft ===== -->
+            <!-- Beide liegen übereinander in derselben Zeile, weil sie einander
+                 ablösen: Bis zum Bremspunkt ist die Frage, *wann* zu treten
+                 ist, danach, *wie fest*. Untereinander spränge die Fensterhöhe
+                 an jedem Bremspunkt einmal auf und wieder zu. -->
+            <Grid Grid.Row="4">
+
+                <!-- Der Balken läuft voll, während der Bremspunkt näher kommt,
+                     und springt im letzten Moment auf Rot. Eine reine
+                     Meterangabe zwingt zum Lesen; die Füllung sieht man aus dem
+                     Augenwinkel. -->
+                <Grid Margin="0,0,0,6"
+                      Visibility="{Binding HasBrakePoint, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
+                               Text="{Binding BrakePointText}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                                <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding BrakeNow}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource SlowerBrush}" />
+                                        <Setter Property="FontWeight" Value="Bold" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <ProgressBar Grid.Row="1"
+                                 Height="6"
+                                 Margin="0,3,0,0"
+                                 Value="{Binding BrakePointProgress, Mode=OneWay}">
+                        <ProgressBar.Style>
+                            <Style TargetType="ProgressBar" BasedOn="{StaticResource RpmBar}">
+                                <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding BrakeNow}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource SlowerBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ProgressBar.Style>
+                    </ProgressBar>
+                </Grid>
+
+                <!-- Während der Bremsphase: Der Balken zeigt, wie fest
+                     tatsächlich getreten wird, die Farbe, ob das zum Sollwert
+                     passt. Grün heißt "so bleiben", Gelb "zu weich oder zu
+                     hart" – welches von beidem, steht als Zahl daneben. -->
+                <Grid Margin="0,0,0,6"
+                      Visibility="{Binding HasBrakeForce, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
+                               Text="{Binding BrakeForceText}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                                <Setter Property="Foreground" Value="{StaticResource FasterBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding BrakeForceIsOff}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <ProgressBar Grid.Row="1"
+                                 Height="6"
+                                 Margin="0,3,0,0"
+                                 Value="{Binding BrakeForceValue, Mode=OneWay}">
+                        <ProgressBar.Style>
+                            <Style TargetType="ProgressBar" BasedOn="{StaticResource RpmBar}">
+                                <Setter Property="Foreground" Value="{StaticResource FasterBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding BrakeForceIsOff}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ProgressBar.Style>
+                    </ProgressBar>
+                </Grid>
+            </Grid>
+
             <!-- ===== Eingaben + Tempo ===== -->
-            <Grid Grid.Row="4" Margin="0,0,0,6">
+            <Grid Grid.Row="5" Margin="0,0,0,6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -233,7 +343,7 @@
             </Grid>
 
             <!-- ===== Meldungen ===== -->
-            <ItemsControl Grid.Row="5" ItemsSource="{Binding Messages}" Margin="0,0,0,4">
+            <ItemsControl Grid.Row="6" ItemsSource="{Binding Messages}" Margin="0,0,0,4">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="0,0,0,3">
@@ -252,7 +362,7 @@
             </ItemsControl>
 
             <!-- ===== Kurvenbericht der letzten Runde ===== -->
-            <StackPanel Grid.Row="6"
+            <StackPanel Grid.Row="7"
                         Visibility="{Binding ShowCornerReport, Converter={StaticResource BoolToVisibility}}">
                 <Rectangle Height="1" Fill="#22FFFFFF" Margin="0,2,0,4" />
                 <TextBlock Style="{StaticResource LabelText}" Text="{Binding ReportHeader}" Margin="0,0,0,3" />
@@ -290,7 +400,7 @@
             </StackPanel>
 
             <!-- ===== Hilfe / Referenzhinweis ===== -->
-            <StackPanel Grid.Row="7" Margin="0,4,0,0">
+            <StackPanel Grid.Row="8" Margin="0,4,0,0">
                 <Rectangle Height="1" Fill="#22FFFFFF" Margin="0,0,0,4" />
                 <TextBlock Style="{StaticResource LabelText}" Text="{Binding ReferenceHint}" />
                 <TextBlock Style="{StaticResource LabelText}"
@@ -318,7 +428,7 @@
             </StackPanel>
 
             <!-- ===== Einmessen der Ideallinie ===== -->
-            <Border Grid.Row="8"
+            <Border Grid.Row="9"
                     Margin="0,6,0,0"
                     Padding="8,6"
                     CornerRadius="5"

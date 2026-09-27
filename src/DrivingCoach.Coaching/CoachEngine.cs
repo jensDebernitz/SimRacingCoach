@@ -26,6 +26,24 @@ public sealed class CoachState
     /// <summary>Die als Nächstes kommende Kurve, falls in Reichweite.</summary>
     public Corner? UpcomingCorner { get; internal set; }
 
+    /// <summary>
+    /// Wo für <see cref="UpcomingCorner"/> gebremst werden muss, in Metern ab
+    /// Start/Ziel. <c>null</c>, wenn die Kurve ohne Bremsen geht.
+    /// </summary>
+    public float? UpcomingBrakePoint { get; internal set; }
+
+    /// <summary>
+    /// Wie fest für <see cref="UpcomingCorner"/> zu treten ist. <c>null</c>,
+    /// solange sich das aus der Referenzrunde nicht ablesen lässt.
+    /// </summary>
+    public BrakePlan? UpcomingBrakePlan { get; internal set; }
+
+    /// <summary>
+    /// Die Bremsphase, in der das Auto gerade steckt. <c>null</c>, wenn gerade
+    /// nicht gebremst werden muss.
+    /// </summary>
+    public ActiveBraking? Braking { get; internal set; }
+
     /// <summary>Anzahl gültig aufgezeichneter Runden in dieser Sitzung.</summary>
     public int ValidLapCount { get; internal set; }
 
@@ -73,6 +91,9 @@ public sealed record LapReview(SessionInfo Session, LapAnalysis Analysis, int La
 /// </summary>
 public sealed class CoachEngine : IDisposable
 {
+    /// <summary>Ab diesem Bremsdruck erübrigt sich der Ruf auf den Bremspunkt.</summary>
+    private const float BrakeCallSilenceThreshold = 0.05f;
+
     private readonly ITelemetrySource _source;
     private readonly LapStore _store;
     private readonly TrackMapStore _maps;
@@ -84,6 +105,8 @@ public sealed class CoachEngine : IDisposable
     private readonly FaultDetector _faults = new();
     private readonly SpeechScheduler _speech;
     private readonly HashSet<int> _cuedCorners = [];
+    private readonly HashSet<int> _calledCorners = [];
+    private readonly HashSet<int> _releasedCorners = [];
     private readonly Lock _gate = new();
 
     /// <summary>
@@ -97,6 +120,29 @@ public sealed class CoachEngine : IDisposable
     private readonly IPhraseSource? _phrases;
 
     private int _lastCueLap = -1;
+
+    /// <summary>
+    /// Bremspunkt je Kurve in Metern ab Start/Ziel, gleiche Reihenfolge wie
+    /// <see cref="CoachState.Corners"/>. <see cref="float.NaN"/> steht für eine
+    /// Kurve ohne Bremsphase.
+    /// </summary>
+    /// <remarks>
+    /// Zwischengespeichert, weil die Suche entlang der Ideallinie pro Kurve ein
+    /// paar Dutzend Abtastungen kostet. Bei 120 Hz und zwanzig Kurven wäre das
+    /// jede Sekunde ein sechsstelliger Aufwand – für Werte, die sich nur ändern,
+    /// wenn eine neue Referenz oder eine neue Linie da ist.
+    /// </remarks>
+    private float[] _brakePoints = [];
+
+    /// <summary>
+    /// Bremskraft-Vorgabe je Kurve, gleiche Reihenfolge wie
+    /// <see cref="_brakePoints"/>. Wird zusammen mit diesen erneuert, damit
+    /// Punkt und Kraft nie zu verschiedenen Ständen gehören.
+    /// </summary>
+    private BrakePlan?[] _brakePlans = [];
+
+    private IdealLine? _brakePointsLine;
+    private IReadOnlyList<Corner>? _brakePointsCorners;
 
     /// <summary>Läuft, solange die Ideallinie im Hintergrund gerechnet wird.</summary>
     private Task? _idealLineWork;
@@ -154,6 +200,8 @@ public sealed class CoachEngine : IDisposable
             State.Reference = null;
             State.Corners = [];
             State.LastAnalysis = null;
+            State.UpcomingCorner = null;
+            State.UpcomingBrakePoint = null;
             State.ValidLapCount = 0;
         }
 
@@ -167,12 +215,14 @@ public sealed class CoachEngine : IDisposable
             State.Session = session;
             State.LastAnalysis = null;
             State.UpcomingCorner = null;
+            State.UpcomingBrakePoint = null;
             State.ValidLapCount = 0;
             State.IdealLine = null;
 
             _recorder.ResetSession(session);
             _faults.Reset();
             _cuedCorners.Clear();
+            _calledCorners.Clear();
 
             // Sperrreihenfolge überall gleich: erst _gate, dann _speechGate.
             lock (_speechGate)
@@ -248,8 +298,8 @@ public sealed class CoachEngine : IDisposable
     }
 
     /// <summary>
-    /// Sucht die nächste Kurve in Fahrtrichtung und gibt rechtzeitig vor dem
-    /// Bremspunkt den Tipp aus der letzten Runde aus.
+    /// Sucht die nächste Kurve in Fahrtrichtung, ruft ihren Bremspunkt aus und
+    /// gibt rechtzeitig davor den Tipp aus der letzten Runde.
     /// </summary>
     private void UpdateUpcomingCorner(in TelemetryFrame frame)
     {
@@ -257,6 +307,9 @@ public sealed class CoachEngine : IDisposable
         if (corners.Count == 0 || State.Reference is null || !frame.IsDriving)
         {
             State.UpcomingCorner = null;
+            State.UpcomingBrakePoint = null;
+            State.UpcomingBrakePlan = null;
+            State.Braking = null;
             return;
         }
 
@@ -264,28 +317,60 @@ public sealed class CoachEngine : IDisposable
         {
             _lastCueLap = frame.LapsCompleted;
             _cuedCorners.Clear();
+            _calledCorners.Clear();
+            _releasedCorners.Clear();
         }
+
+        EnsureBrakePoints();
 
         float binSize = State.Reference.BinSize;
         float lookahead = MathF.Max(frame.Speed, 10f) * (float)_options.CornerCueLeadSeconds;
 
         Corner? next = null;
+        float? nextBrakePoint = null;
+        BrakePlan? nextPlan = null;
         float bestDistance = float.MaxValue;
 
-        foreach (Corner corner in corners)
+        for (int i = 0; i < corners.Count; i++)
         {
-            float brakeDistance = corner.BrakingStartBin * binSize;
-            float ahead = brakeDistance - frame.LapDistance;
+            Corner corner = corners[i];
+            float point = _brakePoints[i];
+
+            // Kurven ohne Bremsphase kommen trotzdem, nur eben über ihren
+            // Eingang statt über einen Bremspunkt, den es nicht gibt.
+            bool hasPoint = !float.IsNaN(point);
+            float marker = hasPoint ? point : corner.StartBin * binSize;
+
+            float ahead = marker - frame.LapDistance;
             if (ahead >= 0f && ahead < bestDistance)
             {
                 bestDistance = ahead;
                 next = corner;
+                nextBrakePoint = hasPoint ? point : null;
+                nextPlan = hasPoint ? _brakePlans[i] : null;
             }
         }
 
         State.UpcomingCorner = next;
+        State.UpcomingBrakePoint = nextBrakePoint;
+        State.UpcomingBrakePlan = nextPlan;
 
-        if (next is null || bestDistance > lookahead || !_cuedCorners.Add(next.Number))
+        // Die laufende Bremsphase hängt nicht an der nächsten Kurve: Ab dem
+        // Bremspunkt ist "die nächste" schon die übernächste, während gerade
+        // noch für die vorige gebremst wird.
+        State.Braking = BrakeGuide.ActiveZone(
+            corners, _brakePoints, _brakePlans, frame.LapDistance, BrakeGuide.TrackLengthOf(State));
+
+        AnnounceBrakeRelease(in frame);
+
+        if (next is null)
+        {
+            return;
+        }
+
+        AnnounceBrakePoint(next, nextBrakePoint, nextPlan, in frame);
+
+        if (bestDistance > lookahead || !_cuedCorners.Add(next.Number))
         {
             return;
         }
@@ -309,6 +394,122 @@ public sealed class CoachEngine : IDisposable
             : advice.Text;
 
         Raise(CoachMessageKind.CornerTip, text, speech, priority: 2);
+    }
+
+    /// <summary>
+    /// Sorgt dafür, dass <see cref="_brakePoints"/> zu den aktuellen Kurven und
+    /// zur aktuellen Ideallinie passt.
+    /// </summary>
+    /// <remarks>
+    /// Beides wird als Ganzes ausgetauscht, nie in sich verändert – ein
+    /// Vergleich auf Objektgleichheit genügt deshalb, um eine Neuberechnung zu
+    /// erkennen.
+    /// </remarks>
+    private void EnsureBrakePoints()
+    {
+        IdealLine? line = State.IdealLine;
+        IReadOnlyList<Corner> corners = State.Corners;
+
+        if (_brakePoints.Length == corners.Count
+            && ReferenceEquals(line, _brakePointsLine)
+            && ReferenceEquals(corners, _brakePointsCorners))
+        {
+            return;
+        }
+
+        _brakePointsLine = line;
+        _brakePointsCorners = corners;
+        _brakePoints = BrakeGuide.BrakePoints(corners, State.Reference, line);
+        _brakePlans = BrakeGuide.Plans(_brakePoints, State.Reference);
+    }
+
+    /// <summary>
+    /// Ruft den Bremspunkt aus – einmal je Kurve und Runde, mit der nötigen
+    /// Bremskraft, sofern sie bekannt ist.
+    /// </summary>
+    /// <remarks>
+    /// Der Ruf erzeugt bewusst keine Meldung fürs Overlay: Der Countdown steht
+    /// dort bereits, eine zweite Karte daneben wäre dieselbe Auskunft doppelt.
+    /// </remarks>
+    private void AnnounceBrakePoint(
+        Corner corner,
+        float? brakePoint,
+        BrakePlan? plan,
+        in TelemetryFrame frame)
+    {
+        if (!_options.BrakeCallsEnabled || brakePoint is not { } point)
+        {
+            return;
+        }
+
+        float length = BrakeGuide.TrackLengthOf(State);
+        if (length < 1f)
+        {
+            return;
+        }
+
+        float away = BrakeGuide.MetresTo(point, frame.LapDistance, length);
+        float lead = MathF.Max(frame.Speed, 10f) * (float)_options.BrakeCallLeadSeconds;
+
+        if (away > lead || !_calledCorners.Add(corner.Number))
+        {
+            return;
+        }
+
+        // Wer schon auf dem Pedal steht, braucht den Ruf nicht mehr. Die Kurve
+        // gilt trotzdem als erledigt – sonst käme er beim Lösen der Bremse nach,
+        // also genau dann, wenn er nicht mehr gemeint ist.
+        if (frame.Brake >= BrakeCallSilenceThreshold)
+        {
+            return;
+        }
+
+        // Ohne bekannte Bremskraft bleibt es beim nackten "Bremsen" – lieber
+        // keine Zahl als eine geratene.
+        Raise(CoachMessageKind.BrakePoint, string.Empty, plan?.CallText ?? "Bremsen", priority: 3);
+    }
+
+    /// <summary>
+    /// Ruft mitten in der Bremsphase das Lösen aus – einmal je Kurve und Runde.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Das ist die zweite Hälfte des Bremsrufs: Wer weiß, dass er in fünfzig
+    /// Metern auf siebzig Prozent zurückgeht, baut den Druck von vornherein
+    /// anders auf. Angesagt wird nur ein Schritt, nicht die ganze Kurve des
+    /// Bremsdrucks – mehr kann niemand mitten im Anbremsen verarbeiten.
+    /// </para>
+    /// <para>
+    /// Wie der Bremspunkt erzeugt auch das keine Meldung fürs Overlay: Dort
+    /// läuft während der Bremsphase ohnehin Soll gegen Ist.
+    /// </para>
+    /// </remarks>
+    private void AnnounceBrakeRelease(in TelemetryFrame frame)
+    {
+        if (!_options.BrakeCallsEnabled
+            || State.Braking is not { } braking
+            || !braking.Plan.HasRelease)
+        {
+            return;
+        }
+
+        // Wer nicht auf der Bremse steht, hat nichts zu lösen. Die Kurve gilt
+        // dann auch nicht als erledigt: Wer kurz danach doch noch tritt, soll
+        // den Hinweis bekommen.
+        if (frame.Brake < BrakeCallSilenceThreshold)
+        {
+            return;
+        }
+
+        float lead = MathF.Max(frame.Speed, 10f) * (float)_options.BrakeReleaseLeadSeconds;
+
+        if (braking.MetresLeft > braking.Plan.ReleaseAtMetres + lead
+            || !_releasedCorners.Add(braking.Corner.Number))
+        {
+            return;
+        }
+
+        Raise(CoachMessageKind.BrakeRelease, string.Empty, braking.Plan.ReleaseCallText, priority: 3);
     }
 
     /// <summary>

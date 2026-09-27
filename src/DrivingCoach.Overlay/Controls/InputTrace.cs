@@ -4,21 +4,32 @@ using System.Windows.Media;
 namespace DrivingCoach.Overlay.Controls;
 
 /// <summary>
-/// Zeichnet den Verlauf von Gas, Bremse und Lenkung der letzten Sekunden.
+/// Zeichnet den Verlauf von Gas, Bremse und Lenkung der letzten Sekunden –
+/// und, gestrichelt dahinter, was Gas und Bremse hätten tun sollen.
 /// </summary>
 /// <remarks>
 /// Selbst gezeichnet statt aus WPF-Formen zusammengesetzt: 180 Datenpunkte
-/// mal drei Kanäle wären 540 <c>Line</c>-Elemente, die der Layout-Durchlauf
+/// mal fünf Kanäle wären 900 <c>Line</c>-Elemente, die der Layout-Durchlauf
 /// 30-mal pro Sekunde anfassen müsste. Ein <see cref="StreamGeometry"/> je
 /// Kanal kostet dagegen fast nichts.
 /// </remarks>
 public sealed class InputTrace : FrameworkElement
 {
-    private static readonly Pen ThrottlePen = Frozen(Color.FromRgb(0x4C, 0xD1, 0x64), 1.6);
-    private static readonly Pen BrakePen = Frozen(Color.FromRgb(0xFF, 0x5B, 0x4A), 1.6);
+    private static readonly Color ThrottleColor = Color.FromRgb(0x4C, 0xD1, 0x64);
+    private static readonly Color BrakeColor = Color.FromRgb(0xFF, 0x5B, 0x4A);
+
+    private static readonly Pen ThrottlePen = Frozen(ThrottleColor, 1.6);
+    private static readonly Pen BrakePen = Frozen(BrakeColor, 1.6);
     private static readonly Pen SteeringPen = Frozen(Color.FromRgb(0x63, 0xB3, 0xFF), 1.3);
     private static readonly Pen GridPen = Frozen(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF), 1.0);
     private static readonly Brush Backdrop = Frozen(Color.FromArgb(0x40, 0x00, 0x00, 0x00));
+
+    // Die Vorgabe in derselben Farbe wie der Kanal, aber gestrichelt und
+    // blasser: Wer Gas und Bremse auseinanderhalten kann, soll nicht zusätzlich
+    // zwei neue Farben lernen müssen. Und der Unterschied zwischen Soll und Ist
+    // bleibt auch dann ablesbar, wenn beide Linien aufeinanderliegen.
+    private static readonly Pen ThrottleTargetPen = Dashed(ThrottleColor, 1.3);
+    private static readonly Pen BrakeTargetPen = Dashed(BrakeColor, 1.3);
 
     public static readonly DependencyProperty HistoryProperty = DependencyProperty.Register(
         nameof(History),
@@ -79,6 +90,11 @@ public sealed class InputTrace : FrameworkElement
         double step = width / (history.Capacity - 1);
         int offset = history.Capacity - history.Count;
 
+        // Erst die Vorgabe, dann das Gefahrene: Wo beides gleich ist, soll die
+        // eigene Linie obenauf liegen.
+        context.DrawGeometry(null, ThrottleTargetPen, BuildPedal(history, history.TargetThrottle, offset, step, pedalHeight));
+        context.DrawGeometry(null, BrakeTargetPen, BuildPedal(history, history.TargetBrake, offset, step, pedalHeight));
+
         context.DrawGeometry(null, ThrottlePen, BuildPedal(history, history.Throttle, offset, step, pedalHeight));
         context.DrawGeometry(null, BrakePen, BuildPedal(history, history.Brake, offset, step, pedalHeight));
         context.DrawGeometry(
@@ -87,7 +103,11 @@ public sealed class InputTrace : FrameworkElement
             BuildSteering(history, offset, step, steeringCentre, (height - pedalHeight) / 2));
     }
 
-    /// <summary>0 liegt auf der Grundlinie, 1 ganz oben.</summary>
+    /// <summary>
+    /// 0 liegt auf der Grundlinie, 1 ganz oben. <see cref="float.NaN"/> im Kanal
+    /// reißt die Linie auf und beginnt danach eine neue – so bleibt sichtbar,
+    /// wo eine Vorgabe fehlt, statt dort eine Gerade quer durchs Bild zu ziehen.
+    /// </summary>
     private static StreamGeometry BuildPedal(
         InputHistory history,
         Func<int, float> channel,
@@ -99,12 +119,31 @@ public sealed class InputTrace : FrameworkElement
 
         using (StreamGeometryContext ctx = geometry.Open())
         {
-            ctx.BeginFigure(new Point((offset) * step, baseline - Math.Clamp(channel(0), 0f, 1f) * baseline), false, false);
+            bool drawing = false;
 
-            for (int i = 1; i < history.Count; i++)
+            for (int i = 0; i < history.Count; i++)
             {
-                double value = Math.Clamp(channel(i), 0f, 1f);
-                ctx.LineTo(new Point((offset + i) * step, baseline - value * baseline), true, false);
+                float raw = channel(i);
+
+                if (float.IsNaN(raw))
+                {
+                    drawing = false;
+                    continue;
+                }
+
+                var point = new Point(
+                    (offset + i) * step,
+                    baseline - (Math.Clamp(raw, 0f, 1f) * baseline));
+
+                if (drawing)
+                {
+                    ctx.LineTo(point, true, false);
+                }
+                else
+                {
+                    ctx.BeginFigure(point, false, false);
+                    drawing = true;
+                }
             }
         }
 
@@ -140,6 +179,17 @@ public sealed class InputTrace : FrameworkElement
     private static Pen Frozen(Color color, double thickness)
     {
         var pen = new Pen(new SolidColorBrush(color), thickness);
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen Dashed(Color color, double thickness)
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromArgb(0xA0, color.R, color.G, color.B)), thickness)
+        {
+            DashStyle = new DashStyle([3.0, 2.5], 0.0),
+        };
+
         pen.Freeze();
         return pen;
     }

@@ -26,6 +26,10 @@ internal enum HotkeyAction
     /// <summary>Den ausgewählten Wert vergrößern oder verkleinern.</summary>
     CalibrationIncrease,
     CalibrationDecrease,
+
+    /// <summary>Das Overlay selbst größer oder kleiner machen.</summary>
+    ScaleUp,
+    ScaleDown,
 }
 
 /// <summary>
@@ -89,6 +93,16 @@ internal sealed class HotkeyManager : IDisposable
     private const uint VkNumpad8 = 0x68;
     private const uint VkNumpad2 = 0x62;
 
+    private const uint VkPageUp = 0x21;
+    private const uint VkPageDown = 0x22;
+
+    private const uint VkAdd = 0x6B;
+    private const uint VkSubtract = 0x6D;
+
+    /// <summary>Die Plus- und Minustaste des Hauptfelds, layoutunabhängig.</summary>
+    private const uint VkOemPlus = 0xBB;
+    private const uint VkOemMinus = 0xBD;
+
     /// <param name="Keys">
     /// Die Wunschtaste zuerst, danach Ausweichtasten in absteigender
     /// Eignung. Die erste, die sich anmelden lässt, gewinnt.
@@ -108,6 +122,11 @@ internal sealed class HotkeyManager : IDisposable
         (HotkeyAction.ResetReference, [VkR, VkZ, VkX], "Referenzrunde verwerfen", true),
         (HotkeyAction.AskQuestion, [VkK, VkA, VkD], "Coach fragen", true),
         (HotkeyAction.SessionSummary, [VkF, VkC, VkT], "Fazit der Session", true),
+
+        // Eine Zeile in der Hilfe für beide Richtungen wäre knapper, aber die
+        // Ausweichtasten machen daraus schnell zwei verschiedene Tasten.
+        (HotkeyAction.ScaleUp, [VkOemPlus, VkAdd, VkPageUp], "Overlay größer", true),
+        (HotkeyAction.ScaleDown, [VkOemMinus, VkSubtract, VkPageDown], "Overlay kleiner", true),
 
         // Ohne dieses Kürzel gäbe es keinen Weg zurück: das Fenster steht
         // weder in der Taskleiste noch in Alt-Tab und hat keinen Schließen-Knopf.
@@ -225,6 +244,12 @@ internal sealed class HotkeyManager : IDisposable
         VkNumpad2 => "Ziffernblock 2",
         VkEnd => "Ende",
         VkDelete => "Entf",
+        VkPageUp => "Bild↑",
+        VkPageDown => "Bild↓",
+        VkOemPlus => "+",
+        VkOemMinus => "−",
+        VkAdd => "Ziffernblock +",
+        VkSubtract => "Ziffernblock −",
 
         // Die Buchstabentasten tragen ihren ASCII-Code als Virtual-Key-Code.
         >= 0x41 and <= 0x5A => ((char)key).ToString(),

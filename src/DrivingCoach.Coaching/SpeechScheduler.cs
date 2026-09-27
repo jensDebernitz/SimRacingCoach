@@ -22,6 +22,8 @@ public sealed class SpeechScheduler(CoachOptions options)
 
     private readonly Dictionary<string, double> _lastSpoken = [];
     private double _lastUtterance = double.NegativeInfinity;
+    private double _lastBrakeCall = double.NegativeInfinity;
+    private double _lastReleaseCall = double.NegativeInfinity;
 
     /// <summary>Prüft, ob die Meldung jetzt gesprochen werden darf.</summary>
     /// <param name="message">Die Meldung.</param>
@@ -34,6 +36,47 @@ public sealed class SpeechScheduler(CoachOptions options)
         }
 
         double now = message.At;
+
+        // Der Bremsruf lebt von der Wiederholung: "Bremsen" heißt an jeder
+        // Kurve dasselbe und muss trotzdem jedes Mal kommen. Er bekommt deshalb
+        // weder Wiederholsperre noch Arbeitslast-Prüfung – wer gleich bremsen
+        // soll, ist per Definition gerade beschäftigt.
+        //
+        // Er läuft außerdem auf einer eigenen Uhr, getrennt von den übrigen
+        // Ansagen. Sonst verschluckt ihn ausgerechnet der Kurventipp, der
+        // dieselbe Kurve meint: Der kommt 2,5 s vorher, der Bremsruf 1,2 s
+        // vorher – auf einer gemeinsamen Uhr wäre der Abstand zu kurz, und die
+        // Kurve, über die der Coach gerade geredet hat, bekäme als einzige
+        // keinen Bremspunkt. Dass "Bremsen" dem Tipp ins Wort fällt, ist
+        // gewollt: SAPI verwirft mit "Purge" das Laufende, und eine Sekunde vor
+        // dem Bremspunkt ist der Rest des Satzes ohnehin verloren.
+        if (message.Kind == CoachMessageKind.BrakePoint)
+        {
+            if (now - _lastBrakeCall < options.BrakeCallMinGapSeconds)
+            {
+                return false;
+            }
+
+            _lastBrakeCall = now;
+            return true;
+        }
+
+        // Der Löseruf gehört zum Bremsruf von eben und bekommt aus denselben
+        // Gründen dieselben Ausnahmen. Seine Uhr ist aber noch einmal eine
+        // eigene: In einer kurzen Bremszone liegen "Bremsen" und "Lösen auf 70"
+        // keine zwei Sekunden auseinander, und ausgerechnet vom zugehörigen
+        // Bremsruf darf ihn nichts verschlucken. Zwei Löserufe kurz
+        // hintereinander – Schikane – werden dagegen weiter zu einem.
+        if (message.Kind == CoachMessageKind.BrakeRelease)
+        {
+            if (now - _lastReleaseCall < options.BrakeCallMinGapSeconds)
+            {
+                return false;
+            }
+
+            _lastReleaseCall = now;
+            return true;
+        }
 
         if (_lastSpoken.TryGetValue(message.SpeechText, out double last) &&
             now - last < options.SpeechRepeatBlockSeconds)
@@ -64,6 +107,8 @@ public sealed class SpeechScheduler(CoachOptions options)
     {
         _lastSpoken.Clear();
         _lastUtterance = double.NegativeInfinity;
+        _lastBrakeCall = double.NegativeInfinity;
+        _lastReleaseCall = double.NegativeInfinity;
     }
 
     private static bool IsDriverBusy(in TelemetryFrame frame) =>

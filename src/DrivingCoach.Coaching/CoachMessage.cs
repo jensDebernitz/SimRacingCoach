@@ -12,6 +12,12 @@ public enum CoachMessageKind
     /// <summary>Hinweis zur gleich kommenden Kurve.</summary>
     CornerTip,
 
+    /// <summary>Der Ruf auf den Bremspunkt.</summary>
+    BrakePoint,
+
+    /// <summary>Der Ruf, die Bremse wieder aufzumachen.</summary>
+    BrakeRelease,
+
     /// <summary>Zusammenfassung nach einer Runde.</summary>
     LapSummary,
 
@@ -56,6 +62,29 @@ public sealed record CoachOptions
 
     /// <summary>Ab diesem Zeitverlust bekommt eine Kurve einen Live-Tipp.</summary>
     public float CornerCueMinTimeLoss { get; init; } = 0.10f;
+
+    /// <summary>Den Bremspunkt ansagen.</summary>
+    public bool BrakeCallsEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Wie viele Sekunden vor dem Bremspunkt "Bremsen" kommt. Kürzer als der
+    /// Kurventipp: Der Ruf soll den Tritt auslösen, nicht ankündigen.
+    /// </summary>
+    public double BrakeCallLeadSeconds { get; init; } = 1.2;
+
+    /// <summary>
+    /// Wie viele Sekunden vor dem Lösepunkt "Lösen auf 70" kommt. Noch kürzer
+    /// als der Bremsruf: Der Fuß steht schon auf dem Pedal, es geht nur noch um
+    /// den Moment.
+    /// </summary>
+    public double BrakeReleaseLeadSeconds { get; init; } = 0.4;
+
+    /// <summary>
+    /// Mindestabstand zwischen zwei Bremsrufen. Gilt an Stelle des normalen
+    /// Ansageabstands – in einer Schikane liegen zwei Bremspunkte dichter
+    /// beieinander, als <see cref="MinimumSpeechGapSeconds"/> erlaubt.
+    /// </summary>
+    public double BrakeCallMinGapSeconds { get; init; } = 2.0;
 
     /// <summary>Wie viele Kurven die Rundenzusammenfassung nennt.</summary>
     public int LapSummaryCornerCount { get; init; } = 3;

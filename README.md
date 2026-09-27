@@ -13,6 +13,13 @@ Hochschalten.
 Gebaut für den Einstieg ins Sim-Racing – die Hinweise sind Klartext
 ("Kurve 4: 12 m später bremsen"), nicht Telemetriekurven zum Selbstdeuten.
 
+Vor jeder Kurve läuft ein Balken auf den **Bremspunkt** zu, und im Moment des
+Tritts sagt der Coach auch, **wie fest**: *"Bremsen, voll"* – und ein Stück
+weiter *"Lösen auf 70"*. Solange du in der Bremszone bist, steht dein Bremsdruck
+gegen den Sollwert. In der Eingabe-Anzeige liegt hinter deinem Gas und deiner
+Bremse gestrichelt die **Vorgabe** – wo die Pedale an dieser Stelle stehen
+sollten. Siehe [Bremspunkt und Pedalvorgabe](#bremspunkt-und-pedalvorgabe).
+
 Dazu zeichnet er dir die **Ideallinie perspektivisch auf den Asphalt**, sobald
 er die Strecke ein paar Runden lang gesehen hat – siehe
 [Ideallinie auf der Strecke](#ideallinie-auf-der-strecke).
@@ -119,9 +126,12 @@ und überleben einen Neustart.
 RUNDE          PROGNOSE        REFERENZ
 1:32,481       1:34,102        1:33,762
 
-Kurve 4 · langsame · Scheitel 78 km/h · in 61 m
+Kurve 4 · langsame · Scheitel 78 km/h · Bremspunkt in 61 m
 
- ╭─╮   ╭────╮      ╭──╮                          4
+Bremspunkt Kurve 4 · 61 m · 100 %
+████████████████████████░░░░░░░░░░░░░░░░
+
+ ╭─╮   ╭┄┄┄┄╮      ╭──╮                          4
 ─╯ ╰───╯    ╰──────╯  ╰─                       184 km/h
  ▂▂▂▃▃▄▄▅▅▆▆▇▇██
 
@@ -145,16 +155,167 @@ Bremspunkt noch weg ist. Hast du dort in der letzten Runde Zeit verloren, kommt
 rund 2,5 Sekunden vor dem Bremspunkt der passende Tipp – früh genug zum
 Reagieren, spät genug zum Merken.
 
+**Bremspunkt** – ein Balken, der volläuft, während der Bremspunkt näher kommt,
+darüber die Entfernung in Metern und **wie fest dort zu bremsen ist**. Er
+erscheint gut drei Sekunden vorher und schlägt am Bremspunkt auf Rot um: aus
+*"Bremspunkt Kurve 4 · 61 m · 100 %"* wird **"BREMSEN · Kurve 4 · 100 %"**.
+Gleichzeitig sagt der Coach "Bremsen, voll" – siehe [Bremspunkt](#bremspunkt).
+
+**Bremskraft** – sobald du in der Bremszone bist, tritt der Countdown an
+derselben Stelle zurück und dein Bremsdruck steht gegen den Sollwert:
+
+```
+Kurve 4 · Bremse 85 % · Soll 100 % · in 45 m auf 70 %
+██████████████████████████████████░░░░░░
+```
+
+Der Balken ist grün, solange du im Rahmen liegst, und schlägt auf Gelb um, wenn
+mehr als 15 Punkte zwischen Ist und Soll liegen – zu zaghaft genauso wie zu
+viel. Rechts läuft der Lösepunkt herunter; ist er erreicht, verschwindet er und
+der Coach sagt "Lösen auf 70". Siehe [Bremskraft](#bremskraft).
+
 **Eingaben** – Gas (grün) und Bremse (rot) der letzten sechs Sekunden, darunter
 die Lenkung. Hier siehst du das, was Rundenzeit kostet, ohne dass es sich so
 anfühlt: zappelnde Lenkung, Gas und Bremse gleichzeitig, ruckartiges Lösen der
 Bremse. Der schmale Balken darunter ist die Drehzahl; er wird gelb, wenn du
 schalten solltest.
 
+Gestrichelt und blasser in derselben Farbe liegt die **Vorgabe** dahinter – wo
+Gas und Bremse an dieser Stelle stehen sollten. Deckt sich deine Linie mit der
+gestrichelten, machst du es richtig; klafft sie auseinander, siehst du sofort,
+in welche Richtung. Siehe [Die Vorgabe für Gas und Bremse](#die-vorgabe-für-gas-und-bremse).
+
 **Meldungen** – Fahrfehler und Kurventipps, die neuesten oben. Nach 25 Sekunden
 verschwinden sie wieder.
 
 **Letzte Runde** – die drei Kurven, die am meisten gekostet haben.
+
+---
+
+## Overlay-Größe
+
+Auf einem 34-Zoll-Ultrawide oder einem 4K-Bildschirm ist das Overlay in
+Standardgröße schlicht zu klein, um es im Augenwinkel zu lesen.
+
+| Kürzel | Wirkung |
+|---|---|
+| `Strg+Alt++` | Eine Stufe größer (10 %) |
+| `Strg+Alt+−` | Eine Stufe kleiner |
+
+Der Bereich geht von 80 % bis 250 %. Nach jedem Druck steht die neue Größe kurz
+als Meldung im Overlay, am Anschlag entsprechend "bleibt bei 250 % – Anschlag
+erreicht". Die Einstellung landet in `overlay.json` und gilt beim nächsten Mal.
+
+Das Overlay **wächst dabei in die Breite**, nicht nur in der Schrift: Das Fenster
+misst sich selbst neu aus und bleibt dabei auf dem Bildschirm. Die Zeilen brechen
+also nicht um, und der Delta-Balken wird länger statt gedrungener.
+
+**Beim ersten Start sucht sich der Coach die Größe selbst** – nach der Höhe des
+Bildschirms, nicht nach der Breite. 1080 Bildpunkte ergeben 100 %, 1440 ergeben
+130 %, 2160 ergeben 200 %. Bei einem Ultrawide ist die Breite das falsche Maß:
+3440 × 1440 würde über die Breite gerechnet fast 180 % ergeben, obwohl eine Zeile
+dort genauso hoch steht wie auf jedem anderen 1440p-Bildschirm. Sobald du die
+Größe einmal von Hand änderst, gilt deine Wahl.
+
+---
+
+## Bremspunkt und Pedalvorgabe
+
+### Bremspunkt
+
+Wo genau angebremst gehört, ist für Einsteiger die schwerste Frage überhaupt –
+und die einzige, bei der ein Meter Unterschied sofort eine Zehntel kostet.
+Deshalb zeigt der Coach ihn doppelt:
+
+- **Der Countdown-Balken** läuft voll, während der Bremspunkt näher kommt, und
+  schlägt beim Erreichen auf Rot um. Er erscheint rund 3,5 Sekunden vorher, bei
+  langsamem Tempo mindestens 70 Meter vorher – sonst blitzte er in der Schikane
+  nur kurz auf.
+- **Der Ruf "Bremsen, voll"** kommt 1,2 Sekunden vor dem Punkt, also so, dass er
+  den Tritt auslöst statt ihn anzukündigen. Höchstens einmal je Kurve und Runde,
+  und gar nicht, wenn du ohnehin schon auf dem Pedal stehst.
+
+Woher der Punkt kommt: Liegt eine [Ideallinie](#ideallinie-auf-der-strecke) vor,
+sucht der Coach von ihrem Scheitel aus rückwärts, bis das Tempoprofil aufhört zu
+fallen – dort beginnt die Verzögerung. Gibt es noch keine Linie, nimmt er die
+Stelle aus deiner Referenzrunde, an der du zuletzt angebremst hast. Der Bremspunkt
+wird also mit jeder besseren Runde selbst besser.
+
+Kurven, die ohne Bremsen gehen, bekommen weder Balken noch Ruf – die Kurve selbst
+wird trotzdem angekündigt.
+
+Wer den Ruf nicht hören will, schaltet mit `Strg+Alt+S` die Sprachausgabe ab –
+der Balken bleibt dann und zeigt den Bremspunkt weiter an. Eine eigene Taste nur
+für den Bremsruf gibt es nicht; im Code hängt er an `CoachOptions.BrakeCallsEnabled`.
+
+### Bremskraft
+
+*Wo* zu bremsen ist, ist nur die halbe Antwort. Die andere Hälfte ist *wie fest*
+– und vor allem, dass der Druck nicht bis zum Scheitel stehen bleibt, sondern zum
+Einlenken hin aufgemacht wird. Genau daran scheitert der Einstieg: voll rein und
+voll drauf bleiben, bis das Auto nicht mehr lenkt.
+
+Deshalb bekommt jede Bremszone **zwei Zahlen**:
+
+| | |
+|---|---|
+| **Spitzendruck** | Wie fest angebremst wird. Steht im Countdown (`· 100 %`) und im Ruf: *"Bremsen, voll"* bzw. *"Bremsen, 70 Prozent"*. |
+| **Lösepunkt** | Wie viele Meter später auf welchen Druck zurückgegangen wird: *"Lösen auf 70"*. |
+
+Zwei Zahlen, nicht mehr. Der gemessene Verlauf ist eine stetige Kurve, aber eine
+Kurve lässt sich nicht sagen und beim Anbremsen erst recht nicht merken. Die
+Kurve steckt weiterhin komplett in der gestrichelten
+[Pedalvorgabe](#die-vorgabe-für-gas-und-bremse); gesprochen werden die zwei
+Eckpunkte.
+
+**Beide Werte sind gemessen, nicht gerechnet** – aus derselben Referenzrunde wie
+die Pedalvorgabe, aus denselben Gründen. Der Coach sucht ab dem Bremspunkt die
+zusammenhängende Bremsphase, nimmt ihren höchsten Druck als Spitze und liest bei
+55 % der Strecke zwischen Spitze und Ende den Druck ab, der dort noch anlag. Das
+ist der Lösepunkt. Gemittelt über drei Abtastungen, damit ein Zucken am Pedal
+nicht zur Ansage wird.
+
+Alle Prozentangaben laufen im **Fünferraster**. Ungerundet spränge die Anzeige
+bei jedem Bild um einen Punkt, und "dreiundachtzig Prozent" wäre im Ohr nur
+falsche Genauigkeit. 100 % heißt in der Ansage "voll" – im Moment des Tritts
+zählt jede Silbe.
+
+Nicht jede Bremszone bekommt einen Lösepunkt. Er fällt weg, wenn du in der
+Referenz durchgetreten und dann schlagartig vom Pedal gegangen bist: Dann gibt
+es nichts zu lösen, und eine 0 hieße "ganz aufmachen". Ebenso bleiben Antipper
+und sehr kurze Bremsphasen ohne Vorgabe – **lieber keine Zahl als eine
+geratene**. Dann kommt wie bisher das nackte "Bremsen".
+
+Während du bremst, zeigt das Overlay Ist gegen Soll. Der **Sollwert dort folgt
+der vollen gemessenen Kurve**, nicht den zwei gesprochenen Eckpunkten: Was das
+Auge laufend mitliest, darf genauer sein als das, was das Ohr sich merken soll.
+
+In einer Schikane steht der Bremspunkt der zweiten Kurve schon an, während für
+die erste noch gebremst wird. Dann gewinnt die laufende Bremszone – zwei Zeilen
+zur selben Stelle der Strecke wären eine zu viel, und die falsche davon wäre die
+auffälligere.
+
+### Die Vorgabe für Gas und Bremse
+
+In der Eingabe-Anzeige liegt hinter deiner Gas- und Bremslinie eine gestrichelte
+in derselben, blasseren Farbe: die Pedalstellung, die an dieser Stelle richtig
+wäre. Zwei Linien statt zwei neuer Farben – wer Gas und Bremse auseinanderhalten
+kann, muss nichts dazulernen.
+
+**Die Vorgabe kommt aus deiner Referenzrunde, nicht aus einer Rechnung.** Das ist
+Absicht. Die Ideallinie kennt nur ein Tempoprofil; welche Gasstellung zu einem
+Tempo gehört, hinge an Motorkennlinie, Luftwiderstand, Getriebe und Abtrieb –
+alles Dinge, die die Schnittstelle von AMS2 nicht hergibt. Eine daraus gerechnete
+Vorgabe wäre geraten und in schnellen Kurven grob falsch: Das Tempoprofil ist dort
+konstant, die nötige Gasstellung aber alles andere als null.
+
+Die Referenzrunde dagegen ist gemessen. Du hast diese Pedalstellungen an genau
+dieser Stelle schon einmal erreicht – die Vorgabe ist also erreichbar, und sie
+wird mit jeder besseren Runde von selbst besser.
+
+Gibt es noch keine Referenz, **reißt die gestrichelte Linie ab**, statt auf null
+zu fallen. Eine Linie am Boden hieße "Fuß runter", und das wäre eine Aussage, wo
+in Wahrheit nichts bekannt ist.
 
 ---
 
@@ -361,6 +522,8 @@ Sie gelten systemweit, also auch während AMS2 den Fokus hat.
 | Kürzel | Ausweichtasten | Wirkung |
 |---|---|---|
 | `Strg+Alt+O` | `H`, `Y` | Overlay ein-/ausblenden |
+| `Strg+Alt++` | Ziffernblock `+`, `Bild↑` | [Overlay größer](#overlay-größe) – in Stufen von 10 %, bis 250 % |
+| `Strg+Alt+−` | Ziffernblock `−`, `Bild↓` | Overlay kleiner, bis 80 % |
 | `Strg+Alt+M` | `V`, `W`, `J` | Verschiebemodus – Rahmen wird gelb, Overlay mit der Maus ziehen, nochmal drücken zum Festsetzen |
 | `Strg+Alt+S` | `P`, `U` | Sprachausgabe ein/aus |
 | `Strg+Alt+L` | `I`, `G` | Ideallinie auf der Strecke ein/aus |
@@ -394,8 +557,8 @@ Boxenfunk und Ansichten belegt.
 steht weder in der Taskleiste noch in Alt-Tab und hat keinen Schließen-Knopf –
 genau deshalb stört es beim Fahren nicht.
 
-Position, Sprach-Einstellung und ob die Linie an ist, merkt sich der Coach in
-`%LocalAppData%\DrivingCoach\overlay.json`.
+Position, Größe, Sprach-Einstellung und ob die Linie an ist, merkt sich der Coach
+in `%LocalAppData%\DrivingCoach\overlay.json`.
 
 Außerhalb des Verschiebemodus ist das Overlay **durchklickbar** – Mausklicks
 landen im Spiel, nicht im Overlay. Es taucht auch nicht in Alt-Tab auf und
@@ -420,6 +583,24 @@ andere mit mindestens vier Sekunden Abstand, derselbe Satz frühestens nach
 hält der Coach die Klappe – wer gerade das Auto fängt, kann keinen Ratschlag
 verarbeiten.
 
+Der [Bremsruf](#bremspunkt) ist von allen drei Regeln ausgenommen und läuft auf
+einer eigenen Uhr. "Bremsen, voll" heißt an jeder Kurve dasselbe und muss
+trotzdem jedes Mal kommen; wer gleich bremsen soll, ist per Definition gerade
+beschäftigt; und auf der gemeinsamen Uhr verschluckte ihn ausgerechnet der
+Kurventipp, der dieselbe Kurve meint – der kommt 2,5 Sekunden vorher, der Ruf
+1,2 Sekunden vorher. Dass "Bremsen" dem Tipp dabei ins Wort fällt, ist gewollt:
+Eine Sekunde vor dem Bremspunkt ist der Rest des Satzes ohnehin verloren. Es gilt
+nur ein Mindestabstand von zwei Sekunden zum vorigen Bremsruf, damit eine
+Schikane nicht zweimal ruft.
+
+Der Löseruf ("Lösen auf 70") gehört zum Bremsruf von eben und bekommt aus
+denselben Gründen dieselben Ausnahmen – **plus noch einmal eine eigene Uhr**. In
+einer kurzen Bremszone liegen "Bremsen, voll" und "Lösen auf 70" keine zwei
+Sekunden auseinander, und ausgerechnet vom zugehörigen Bremsruf darf ihn nichts
+verschlucken. Zwei Löserufe kurz hintereinander werden dagegen weiter zu einem.
+Er kommt 0,4 Sekunden vor dem Lösepunkt und nur, solange du auch wirklich auf der
+Bremse stehst: Wer nicht tritt, hat nichts zu lösen.
+
 ---
 
 ## Ohne AMS2 ausprobieren
@@ -435,6 +616,14 @@ die Referenz und der Delta-Balken lebt.
 
 Die Simulator-Runde landet unter dem Schlüssel `Testkurs_Simulator_…` im
 Rundenspeicher und stört deine echten Referenzrunden nicht.
+
+**Der [Löseruf](#bremskraft) kommt im Simulator nie** – das ist kein Fehler. Der
+simulierte Fahrer bremst mit konstanter Verzögerung, sein Bremskanal ist also ein
+Rechteck: hundert Prozent bis zum Scheitel, dann null. Genau die Modulation, um
+die es beim Lösepunkt geht, kommt darin nicht vor. Sie ließe sich nur
+hineinschreiben, ohne dass die simulierte Physik dazu passt – dann prüfte man den
+Coach gegen Daten, die es im Spiel so nicht gibt. Spitzendruck, Countdown und die
+Ist-gegen-Soll-Anzeige funktionieren im Simulator dagegen vollständig.
 
 ---
 
@@ -492,7 +681,7 @@ src/DrivingCoach.Coaching/    Die Fahrlogik – plattformfrei und testbar
 src/DrivingCoach.Ai/          Gemini-Anbindung, Prompts, Ansagen-Vorrat
 src/DrivingCoach.Overlay/     WPF-Fenster, Win32-Interop, Sprachausgabe
   Updates/                    Velopack: Suche im Hintergrund, Einbau beim Beenden
-tests/DrivingCoach.Tests/     186 Tests über virtuelle Runden
+tests/DrivingCoach.Tests/     276 Tests über virtuelle Runden
 .github/workflows/            CI bei jedem Push, Release bei jedem Tag
 ```
 
@@ -515,6 +704,13 @@ nicht als Tempolimit ausdrücken. Dafür wird allein der Lenkkanal gegen die
 Streckengeometrie verschoben – die Gierrate bleibt geometrisch, denn aus ihr
 bestimmt der Coach die Kurvengrenzen, und die kommen immer aus der Referenz.
 
+Die [Bremskraft](#bremskraft) wird dagegen gegen handgebaute Runden geprüft. Der
+virtuelle Fahrer bremst mit konstanter Verzögerung, sein Bremskanal ist damit ein
+Rechteck – die Modulation, um die es dort geht, kommt darin schlicht nicht vor.
+Statt die gemeinsame Vorlage dafür zu verbiegen, bekommt dieser eine Fall Runden
+mit von Hand gelegtem Bremsverlauf. Dass der Löseruf am Rechteckprofil *nicht*
+kommt, ist als eigener Test festgehalten.
+
 Die KI-Schicht wird ohne Netz geprüft: Getestet wird nicht die Anfrage, sondern
 das Auswerten der Antwort – abgeschnittene Texte, fehlende Felder, Zahlen als
 String – und die Filterung des Ansagen-Vorrats. Ein zu langer oder als
@@ -531,6 +727,15 @@ Aufzählung geratener Satz darf nicht mitten in der Kurve vorgelesen werden.
 | Overlay ist unsichtbar über dem Spiel | AMS2 läuft im Fullscreen-Exclusive-Modus. Auf Borderless umstellen. |
 | Overlay liegt hinter AMS2 | Sollte sich binnen einer Sekunde von selbst erledigen: Der Coach holt sich seinen Platz zurück, wenn ein anderes Fenster ihn beansprucht. Bleibt es dahinter, läuft AMS2 im Fullscreen-Exclusive-Modus (siehe Zeile darüber). |
 | Overlay ist ganz weg | Vermutlich mit `Strg+Alt+O` ausgeblendet. Nochmal drücken. |
+| Overlay ist zu klein zum Lesen | `Strg+Alt++` drücken, so oft du magst – siehe [Overlay-Größe](#overlay-größe). |
+| Overlay ragt nach dem Vergrößern über den Rand | Sollte nicht passieren: Es zieht sich von selbst auf den Bildschirm zurück. Sonst `Strg+Alt+M` und von Hand schieben. |
+| Keine gestrichelte Vorgabe bei Gas und Bremse | Es gibt noch keine Referenzrunde. Bis dahin bleibt die Linie absichtlich weg, statt null vorzugeben. |
+| Kein Bremspunkt-Balken vor einer Kurve | Diese Kurve geht ohne Bremsen – dann gibt es auch nichts anzukündigen. |
+| Der Ruf "Bremsen" kommt nicht | Entweder stehst du schon auf der Bremse (dann ist er überflüssig), oder die Sprachausgabe ist mit `Strg+Alt+S` aus. |
+| Es kommt "Bremsen" ohne Prozentangabe | Aus der Referenzrunde ließ sich für diese Kurve keine brauchbare Bremsphase lesen – zu kurz, zu schwach oder es gibt noch keine Referenz. Der Coach nennt dann lieber keine Zahl als eine geratene. |
+| Kein Ist-gegen-Soll-Balken beim Bremsen | Dasselbe: ohne Bremskraft-Vorgabe für diese Kurve gibt es auch nichts zu vergleichen. Eine saubere Runde als Referenz genügt. |
+| Der Löseruf "Lösen auf …" kommt nie | Im Simulator systembedingt nie – [siehe dort](#ohne-ams2-ausprobieren). Im Spiel heißt es: In der Referenzrunde bist du durchgetreten und dann schlagartig vom Pedal gegangen. Fahr eine Runde mit sauberem Trailbraking, dann steht sie als Vorgabe. |
+| Der Bremsdruck-Balken ist dauernd gelb | Mehr als 15 Punkte zwischen Ist und Soll. Gelb heißt nicht nur "zu wenig" – zu viel Druck sieht genauso aus. Die Zahl daneben sagt, in welche Richtung. |
 | Ein Tastenkürzel tut nichts | Ein anderes Programm hält die Kombination. Der Coach weicht selbsttätig auf eine andere Taste aus und schreibt unten ins Overlay, auf welche. |
 | Keine Ansagen | Mit `Strg+Alt+S` prüfen (Symbol oben rechts), sonst fehlt ein deutsches Sprachpaket. |
 | Es kommt nie eine Referenzrunde | Jede Runde wurde verworfen. Der Grund steht als Meldung im Overlay – meist "im Spiel als ungültig gewertet" (Strecke verlassen) oder "Boxengasse". |
